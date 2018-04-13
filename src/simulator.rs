@@ -4,10 +4,17 @@ use std::io::BufReader;
 use std::fs::File;
 use std::error::Error;
 use std::path::Path;
+use std::f32;
 
 extern crate serde_derive;
 extern crate serde;
 extern crate serde_json;
+
+enum CacheLevel {
+    LevelOne,
+    LevelTwo,
+    LevelThree,
+}
 
 pub struct Simulator {
     user_file: String,
@@ -19,6 +26,7 @@ pub struct Simulator {
     fov_height: usize,
     path_list: Vec<Vec<Viewport>>,
     user_fov_list: Vec<Viewport>,
+    current_cache_level: CacheLevel,
 }
 
 #[derive(Deserialize, Debug)]
@@ -42,7 +50,7 @@ fn read_json_cluster_from_file<P: AsRef<Path>>(path: P) -> Result<Vec<VideoObjec
 
 impl Simulator {
     pub fn new(user_file: &String, dump_file: &String, cluster_json: &String, threshold: f32, segment: usize, fov_width: usize, fov_height: usize) -> Self {
-        Simulator {
+        let mut sim = Simulator {
             user_file: user_file.to_string(),
             dump_file: dump_file.to_string(),
             cluster_json: cluster_json.to_string(),
@@ -52,10 +60,15 @@ impl Simulator {
             fov_height,
             path_list: vec![],
             user_fov_list: vec![],
-        }
+            current_cache_level: CacheLevel::LevelOne,
+        };
+        sim.parse_tracing_to_path_list();
+        sim.parse_user_data();
+        sim
     }
 
-    pub fn parse_tracing_to_path_list(&mut self) {
+    // update self.path_list
+    fn parse_tracing_to_path_list(&mut self) {
         let file = File::open(&self.dump_file).unwrap();
         let buf_reader = BufReader::new(&file);
         let mut traces: Vec<Viewport> = vec![];
@@ -92,8 +105,10 @@ impl Simulator {
         // integrate cluster_json and trace dump
         let video_objects = read_json_cluster_from_file(&self.cluster_json).unwrap();
         for video_object in video_objects {
-            let start = video_object.from_start;
-            let end = video_object.from_end;
+            // -1 is for normalize the start id in trace dump file to 0
+            // so that we have the same start id as we get from user_view_port_result
+            let start = video_object.from_start - 1;
+            let end = video_object.from_end - 1;
             let mut frame_id = start;
             let mut path: Vec<Viewport> = vec![];
 
@@ -110,7 +125,8 @@ impl Simulator {
         }
     }
 
-    pub fn parse_user_data(&mut self) {
+    // update user_fov_list
+    fn parse_user_data(&mut self) {
         let file = File::open(&self.user_file).unwrap();
         let buf_reader = BufReader::new(file);
 
@@ -130,5 +146,26 @@ impl Simulator {
             self.user_fov_list.push(u_fov);
         }
 //        println!("{:?}", self.user_fov_list);
+    }
+
+    pub fn hierarchical_simulate(&self) {
+        let current_path: Option<usize> = None;
+        for (k, user_fov) in self.user_fov_list.iter().enumerate() {
+            let mut max_ratio: f32 = f32::NEG_INFINITY;
+            let mut max_ratio_path: Option<usize> = None;
+            let mut temp_viewport: Option<&Viewport> = None;
+            let width= self.fov_width;
+            let height = self.fov_height;
+
+            for (path, path_viewport) in self.path_list[k].iter().enumerate() {
+                let current_ratio = path_viewport.get_cover_result(user_fov);
+                if max_ratio < current_ratio {
+                    max_ratio = current_ratio;
+                    max_ratio_path = Some(path);
+                    temp_viewport = Some(path_viewport);
+                }
+            }
+            println!("k: {}, path: {}, ratio: {}", k, max_ratio_path.unwrap(), max_ratio);
+        }
     }
 }
