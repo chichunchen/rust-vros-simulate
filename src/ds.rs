@@ -3,12 +3,12 @@ pub struct Viewport {
     conf: i32,
     x: i32,
     y: i32,
-    width: i32,
-    height: i32,
+    width: usize,
+    height: usize,
 }
 
 impl Viewport {
-    pub fn new(conf: i32, x: i32, y: i32, width: i32, height: i32) -> Self {
+    pub fn new(conf: i32, x: i32, y: i32, width: usize, height: usize) -> Self {
         Viewport {
             conf,
             x,
@@ -18,9 +18,9 @@ impl Viewport {
         }
     }
 
-    pub fn create_new_with_size(other_viewport: &Viewport, width: i32, height: i32) -> Viewport {
-        let x = other_viewport.x + ((other_viewport.width - width) / 2);
-        let y = other_viewport.y + ((other_viewport.height - height) / 2);
+    pub fn create_new_with_size(other_viewport: &Viewport, width: usize, height: usize) -> Viewport {
+        let x = other_viewport.x + ((other_viewport.width as i32 - width as i32) / 2);
+        let y = other_viewport.y + ((other_viewport.height as i32 - height as i32) / 2);
         Viewport {
             conf: other_viewport.conf,
             x,

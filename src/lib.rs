@@ -26,13 +26,11 @@ fn main() {
     let user_file: String = args[1].clone();
     let dump_file: String = args[2].clone();
     let cluster_json: String = args[3].clone();
-    let threshold: f64 = args[4].parse::<f64>().unwrap();
-    let segment: i32 = args[5].parse::<i32>().unwrap();
+    let threshold = args[4].parse::<f32>().unwrap();
+    let segment = args[5].parse::<usize>().unwrap();
 
 //    let p: &Path = Path::new(&object_result);
 //    iterate_userfile(p);
-    let mut simulator = Simulator::new(&user_file, &dump_file, &cluster_json, threshold, segment);
+    let mut simulator = Simulator::new(&user_file, &dump_file, &cluster_json, threshold, segment, 1800, 1800);
     simulator.parse_tracing_to_path_list();
-
-
 }
