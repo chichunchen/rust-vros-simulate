@@ -33,4 +33,5 @@ fn main() {
 //    iterate_userfile(p);
     let mut simulator = Simulator::new(&user_file, &dump_file, &cluster_json, threshold, segment, 1800, 1800);
     simulator.parse_tracing_to_path_list();
+    simulator.parse_user_data();
 }

@@ -18,6 +18,7 @@ pub struct Simulator {
     fov_width: usize,
     fov_height: usize,
     path_list: Vec<Vec<Viewport>>,
+    user_fov_list: Vec<Viewport>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -50,6 +51,7 @@ impl Simulator {
             fov_width,
             fov_height,
             path_list: vec![],
+            user_fov_list: vec![],
         }
     }
 
@@ -106,5 +108,27 @@ impl Simulator {
             }
 //            println!("{}: {:?}", start, self.path_list[start]);
         }
+    }
+
+    pub fn parse_user_data(&mut self) {
+        let file = File::open(&self.user_file).unwrap();
+        let buf_reader = BufReader::new(file);
+
+        for line in buf_reader.lines() {
+            let line = line.unwrap();
+            let line_split: Vec<&str> = line.split(" ").collect();
+            let key = (&line_split[0]).parse::<usize>().unwrap();
+            let conf = (&line_split[1]).parse::<i32>().unwrap();
+
+            let extract: Vec<&str> = line_split[2].split(",").collect();
+            let x = (&extract[0]).parse::<i32>().unwrap();
+            let y = (&extract[1]).parse::<i32>().unwrap();
+            let width = (&extract[2]).parse::<usize>().unwrap();
+            let height = (&extract[3]).parse::<usize>().unwrap();
+            let u_fov = Viewport::new(conf, x, y, width, height);
+            // assume user_viewport file has key start from 0 and add one consecutively
+            self.user_fov_list.push(u_fov);
+        }
+//        println!("{:?}", self.user_fov_list);
     }
 }
