@@ -1,0 +1,17 @@
+[package]
+name = "vros-simulate"
+version = "0.1.0"
+authors = ["chichunchen <chichunchen844@gmail.com>"]
+
+[dependencies]
+serde = "1.0.37"
+serde_derive = "1.0"
+serde_json = "1.0"
+
+[lib]
+name = "simulator"
+path = "src/lib.rs"
+
+[[bin]]
+name = "simulator"
+path = "src/lib.rs"
