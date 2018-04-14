@@ -10,14 +10,14 @@ extern crate serde_derive;
 extern crate serde;
 extern crate serde_json;
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 enum CacheLevel {
     LevelOne,
     LevelTwo,
     LevelThree,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 struct Hit {
     index: usize,
     ratio: f32,
@@ -40,6 +40,7 @@ pub struct Simulator {
     current_cache_level: CacheLevel,
     level_two_width: usize,
     level_two_height: usize,
+    hit_list: Vec<Hit>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -76,6 +77,7 @@ impl Simulator {
             current_cache_level: CacheLevel::LevelOne,
             level_two_width,
             level_two_height,
+            hit_list: vec![],
         };
         sim.parse_tracing_to_path_list();
         sim.parse_user_data();
@@ -178,6 +180,7 @@ impl Simulator {
             };
             (hit, CacheLevel::LevelOne)
         } else {
+            println!("L1 miss {} at {}", index, ratio);
             self.compare_from_level_two(&fov, &user_fov, index, path)
         }
     }
@@ -185,7 +188,6 @@ impl Simulator {
     fn compare_from_level_two(&self, fov: &Viewport, user_fov: &Viewport, index: usize, path: usize) -> (Hit, CacheLevel) {
         let level_one_ratio = fov.get_cover_result(user_fov);
         let hit: Hit;
-        println!("L1 miss {} at {}", index, level_one_ratio);
         let level_two_viewport = Viewport::create_new_with_size(&fov, self.level_two_width, self.level_two_height);
         let level_two_ratio = level_two_viewport.get_cover_result(user_fov);
         if level_two_ratio >= self.threshold {
@@ -200,8 +202,8 @@ impl Simulator {
             };
             (hit, CacheLevel::LevelTwo)
         } else {
+            println!("L2 miss {} at {}", index, level_two_ratio);
             if level_two_ratio < level_one_ratio {
-                println!("L2 miss {} at {}", index, level_two_ratio);
                 println!("l1 {:?}", fov);
                 println!("l2 {:?}", level_two_viewport);
                 println!("user {:?}", user_fov);
@@ -212,6 +214,7 @@ impl Simulator {
     }
 
     fn compare_from_level_three(&self, index: usize, path: usize) -> (Hit, CacheLevel) {
+        println!("L3 hit {} at {}", index, 1);
         let hit: Hit;
         hit = Hit {
             index,
@@ -224,9 +227,16 @@ impl Simulator {
         (hit, CacheLevel::LevelThree)
     }
 
-    pub fn hierarchical_simulate(&self) {
+    pub fn hierarchical_simulate(&mut self) {
         let mut current_path: Option<usize> = None;
-        let mut current_cache_level = CacheLevel::LevelOne;
+        let mut hit_cache_pair: (Hit, CacheLevel) = (Hit {
+            index: 0,
+            ratio: 0.0,
+            cache_level: CacheLevel::LevelOne,
+            path: 0,
+            width: 0,
+            height: 0,
+        }, CacheLevel::LevelOne);
         for (k, user_fov) in self.user_fov_list.iter().enumerate() {
             let mut max_ratio: f32 = f32::NEG_INFINITY;
             let mut max_ratio_path: Option<usize> = None;
@@ -242,11 +252,26 @@ impl Simulator {
                     temp_viewport = Some(path_viewport);
                 }
             }
-//            println!("k: {}, path: {}, ratio: {}", k, max_ratio_path.unwrap(), max_ratio);
-            let hit: Hit;
+
             if k % self.segment == 0 {
-                let (hit, current_cache_level) = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height);
-            } else {}
+                hit_cache_pair = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height);
+                self.hit_list.push(hit_cache_pair.0.clone());
+            } else {
+//                println!("k: {}, path: {}, ratio: {}", k, max_ratio_path.unwrap(), max_ratio);
+                match hit_cache_pair.1 {
+                    CacheLevel::LevelOne => {
+                        hit_cache_pair = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height);
+                    }
+                    CacheLevel::LevelTwo => {
+                        hit_cache_pair = self.compare_from_level_two(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap());
+                    }
+                    CacheLevel::LevelThree => {
+                        hit_cache_pair = self.compare_from_level_three(k, max_ratio_path.unwrap());
+                    }
+                }
+                self.hit_list.push(hit_cache_pair.0.clone());
+            }
         }
+        assert_eq!(self.hit_list.len(), self.user_fov_list.len());
     }
 }
