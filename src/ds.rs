@@ -20,7 +20,7 @@ impl Viewport {
 
     pub fn create_new_with_size(other_viewport: &Viewport, width: usize, height: usize) -> Viewport {
         let mut x = other_viewport.x + ((other_viewport.width as i32 - width as i32) / 2);
-        let mut y = other_viewport.y + ((other_viewport.height as i32 - height as i32) / 2);
+        let y = other_viewport.y + ((other_viewport.height as i32 - height as i32) / 2);
         if x < 0 {
             x = 3840 + x;
         }
@@ -45,31 +45,31 @@ impl Viewport {
             if self.x < (user_fov.x + user_fov.width as i32 - 3840) {
                 let left_1 = i32::max(self.x, 0);
                 let right_1 = i32::min(self.x + self.width as i32, user_fov.x + user_fov.width as i32 - 3840);
-                total_x += (right_1 - left_1);
+                total_x += right_1 - left_1;
             }
             if self.x + self.width as i32 > user_fov.x {
                 let left_2 = user_fov.x;
                 let right_2 = self.x + self.width as i32;
-                total_x += (right_2 - left_2);
+                total_x += right_2 - left_2;
             }
-        } else if self.x + self.width as i32 > 3840 && user_fov.x + user_fov.width as i32 > 3840 {
-            let left_1 = 0;
-            let right_1 = i32::min(self.x + self.width as i32 - 3840, user_fov.x + user_fov.width as i32 - 3840);
-            total_x += (right_1 - left_1);
-            let left_2 = i32::max(self.x, user_fov.x);
-            let right_2 = 3840;
-            total_x += (right_2 - left_2);
-        } else if (user_fov.x + user_fov.width as i32) < 3840 && (self.x + self.width as i32) > 3840 {
+        } else if (user_fov.x + user_fov.width as i32) <= 3840 && (self.x + self.width as i32) > 3840 {
             if self.x + self.width as i32 - 3840 > user_fov.x {
                 let left = user_fov.x;
                 let right = i32::min(self.x + self.width as i32 - 3840, user_fov.x + user_fov.width as i32);
-                total_x += (right - left);
+                total_x += right - left;
             }
             if (user_fov.x + user_fov.width as i32) > self.x {
                 let left = i32::max(self.x, user_fov.x);
                 let right = i32::min(3840, user_fov.x + user_fov.width as i32);
-                total_x += (right - left);
+                total_x += right - left;
             }
+        } else if self.x + self.width as i32 > 3840 && user_fov.x + user_fov.width as i32 > 3840 {
+            let left_1 = 0;
+            let right_1 = i32::min(self.x + self.width as i32 - 3840, user_fov.x + user_fov.width as i32 - 3840);
+            total_x += right_1 - left_1;
+            let left_2 = i32::max(self.x, user_fov.x);
+            let right_2 = 3840;
+            total_x += right_2 - left_2;
         }
 
         let bottom = i32::max(self.y, user_fov.y);
@@ -106,12 +106,6 @@ impl Frame {
             traces: t,
         }
     }
-}
-
-#[derive(Debug)]
-pub struct Path {
-    dump: String,
-    frame_list: Vec<Option<Frame>>,
 }
 
 
