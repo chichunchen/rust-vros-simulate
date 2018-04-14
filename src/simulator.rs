@@ -176,7 +176,11 @@ impl Simulator {
             (hit, CacheLevel::LevelOne)
         } else {
 //            println!("L1 miss {} at {}", index, ratio);
-            self.compare_from_level_two(&fov, &user_fov, index, path)
+            if self.is_hierarchical() {
+                self.compare_from_level_two(&fov, &user_fov, index, path)
+            } else {
+                self.compare_from_level_three(index, path)
+            }
         }
     }
 
@@ -223,7 +227,16 @@ impl Simulator {
         (hit, CacheLevel::LevelThree)
     }
 
-    pub fn hierarchical_simulate(&mut self) {
+    fn is_hierarchical(&self) -> bool {
+        if self.fov_width == self.level_two_width && self.fov_height == self.level_two_height {
+            false
+        } else {
+            true
+        }
+    }
+
+    // simulate with hierarchical or non-hierarchical with segment and threshold implicitly
+    pub fn simulate(&mut self) {
         let mut current_path: Option<usize> = None;
         let mut hit_cache_pair: (Hit, CacheLevel) = (Hit {
             index: 0,
@@ -255,23 +268,37 @@ impl Simulator {
                 self.hit_list.push(hit_cache_pair.0.clone());
             } else {
 //                println!("k: {}, path: {}, ratio: {}", k, max_ratio_path.unwrap(), max_ratio);
-                match hit_cache_pair.1 {
-                    CacheLevel::LevelOne => {
-                        if current_path == max_ratio_path {
-                            hit_cache_pair = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height);
-                        } else {
-                            hit_cache_pair = self.compare_from_level_three(k, max_ratio_path.unwrap());
+                if self.fov_width == self.level_two_width && self.fov_height == self.level_two_height {
+                    match hit_cache_pair.1 {
+                        CacheLevel::LevelOne => {
+                            if current_path == max_ratio_path {
+                                hit_cache_pair = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height);
+                            } else {
+                                hit_cache_pair = self.compare_from_level_three(k, max_ratio_path.unwrap());
+                            }
                         }
+                        CacheLevel::LevelTwo => assert!(false),
+                        CacheLevel::LevelThree => hit_cache_pair = self.compare_from_level_three(k, current_path.unwrap()),
                     }
-                    CacheLevel::LevelTwo => {
-                        if current_path == max_ratio_path {
-                            hit_cache_pair = self.compare_from_level_two(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap());
-                        } else {
+                } else {
+                    match hit_cache_pair.1 {
+                        CacheLevel::LevelOne => {
+                            if current_path == max_ratio_path {
+                                hit_cache_pair = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height);
+                            } else {
+                                hit_cache_pair = self.compare_from_level_three(k, max_ratio_path.unwrap());
+                            }
+                        }
+                        CacheLevel::LevelTwo => {
+                            if current_path == max_ratio_path {
+                                hit_cache_pair = self.compare_from_level_two(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap());
+                            } else {
+                                hit_cache_pair = self.compare_from_level_three(k, current_path.unwrap());
+                            }
+                        }
+                        CacheLevel::LevelThree => {
                             hit_cache_pair = self.compare_from_level_three(k, current_path.unwrap());
                         }
-                    }
-                    CacheLevel::LevelThree => {
-                        hit_cache_pair = self.compare_from_level_three(k, current_path.unwrap());
                     }
                 }
                 self.hit_list.push(hit_cache_pair.0.clone());
@@ -279,19 +306,30 @@ impl Simulator {
         }
         assert_eq!(self.hit_list.len(), self.user_fov_list.len());
 //        println!("{:?}", self.hit_list);
-        self.get_hit_ratio();
+        self.get_hit_counts();
     }
 
-    pub fn get_hit_ratio(&self) -> (usize, usize, usize) {
-        let mut level_1_count = 0;
-        let mut level_2_count = 0;
-        let mut level_3_count = 0;
+    pub fn get_hit_counts(&self) -> Box<[usize; 3]> {
+        let mut count_arr: Box<[usize; 3]> = Box::new([0, 0, 0]);
         (&self.hit_list).iter().for_each(|&x| match x.cache_level {
-            CacheLevel::LevelOne => level_1_count += 1,
-            CacheLevel::LevelTwo => level_2_count += 1,
-            CacheLevel::LevelThree => level_3_count += 1,
+            CacheLevel::LevelOne => count_arr[0] += 1,
+            CacheLevel::LevelTwo => count_arr[1] += 1,
+            CacheLevel::LevelThree => count_arr[2] += 1,
         });
-        println!("{} {} {}", level_1_count, level_2_count, level_3_count);
-        (level_1_count, level_2_count, level_3_count)
+        println!("{:?}", count_arr);
+        count_arr
     }
+
+    pub fn get_accumulate_hit_ratio(&self) -> Box<[f32; 3]> {
+        let hit_len = self.hit_list.len();
+        let hit_count_arr = self.get_hit_counts();
+        let mut acc_hit_ratio: Box<[f32; 3]> = Box::new([0.0, 0.0, 0.0]);
+        acc_hit_ratio[0] = hit_count_arr[0] as f32 / hit_len as f32;
+        acc_hit_ratio[1] = acc_hit_ratio[0] + (hit_count_arr[1] as f32 / hit_len as f32);
+        acc_hit_ratio[2] = 1.0;
+        println!("{:?}", acc_hit_ratio);
+        acc_hit_ratio
+    }
+
+    // TODO non-hierarchical hit_ratio
 }

@@ -13,16 +13,6 @@ use std::fs::{self};
 use std::io;
 use std::fs::DirEntry;
 
-fn iterate_userfile(p: &Path) -> io::Result<()> {
-    if p.is_dir() {
-        for entry in fs::read_dir(p)? {
-            let dir = entry?;
-            println!("{:?}", dir.path());
-        }
-    }
-    Ok(())
-}
-
 fn main() {
     let args: Vec<String> = env::args().collect();
     let object_result = args[1].clone();
@@ -40,6 +30,9 @@ fn main() {
         let user_file = dir.path().to_str().unwrap().to_string();
         println!("{}", user_file);
         let mut simulator = Simulator::new(&user_file, &dump_file, &cluster_json, threshold, segment, width, height, l2_width, l2_height);
-        simulator.hierarchical_simulate();
+        simulator.simulate();
+        println!("baseline: ");
+        let mut simulator = Simulator::new(&user_file, &dump_file, &cluster_json, threshold, segment, width, height, width, height);
+        simulator.simulate();
     }
 }
