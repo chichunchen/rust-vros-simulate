@@ -254,24 +254,34 @@ impl Simulator {
             }
 
             if k % self.segment == 0 {
+                current_path = max_ratio_path;
                 hit_cache_pair = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height);
                 self.hit_list.push(hit_cache_pair.0.clone());
             } else {
 //                println!("k: {}, path: {}, ratio: {}", k, max_ratio_path.unwrap(), max_ratio);
                 match hit_cache_pair.1 {
                     CacheLevel::LevelOne => {
-                        hit_cache_pair = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height);
+                        if current_path == max_ratio_path {
+                            hit_cache_pair = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height);
+                        } else {
+                            hit_cache_pair = self.compare_from_level_three(k, max_ratio_path.unwrap());
+                        }
                     }
                     CacheLevel::LevelTwo => {
-                        hit_cache_pair = self.compare_from_level_two(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap());
+                        if current_path == max_ratio_path {
+                            hit_cache_pair = self.compare_from_level_two(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap());
+                        } else {
+                            hit_cache_pair = self.compare_from_level_three(k, current_path.unwrap());
+                        }
                     }
                     CacheLevel::LevelThree => {
-                        hit_cache_pair = self.compare_from_level_three(k, max_ratio_path.unwrap());
+                        hit_cache_pair = self.compare_from_level_three(k, current_path.unwrap());
                     }
                 }
                 self.hit_list.push(hit_cache_pair.0.clone());
             }
         }
         assert_eq!(self.hit_list.len(), self.user_fov_list.len());
+//        println!("{:?}", self.hit_list);
     }
 }
