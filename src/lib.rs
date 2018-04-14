@@ -30,9 +30,11 @@ fn main() {
     let segment = args[5].parse::<usize>().unwrap();
     let width = args[6].parse::<usize>().unwrap();
     let height = args[7].parse::<usize>().unwrap();
+    let l2_width = args[8].parse::<usize>().unwrap();
+    let l2_height = args[9].parse::<usize>().unwrap();
 
 //    let p: &Path = Path::new(&object_result);
 //    iterate_userfile(p);
-    let mut simulator = Simulator::new(&user_file, &dump_file, &cluster_json, threshold, segment, width, height);
+    let mut simulator = Simulator::new(&user_file, &dump_file, &cluster_json, threshold, segment, width, height, l2_width, l2_height);
     simulator.hierarchical_simulate();
 }

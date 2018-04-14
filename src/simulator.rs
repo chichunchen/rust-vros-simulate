@@ -10,10 +10,21 @@ extern crate serde_derive;
 extern crate serde;
 extern crate serde_json;
 
+#[derive(Debug)]
 enum CacheLevel {
     LevelOne,
     LevelTwo,
     LevelThree,
+}
+
+#[derive(Debug)]
+struct Hit {
+    index: usize,
+    ratio: f32,
+    path: usize,
+    cache_level: CacheLevel,
+    width: usize,
+    height: usize,
 }
 
 pub struct Simulator {
@@ -27,6 +38,8 @@ pub struct Simulator {
     path_list: Vec<Vec<Viewport>>,
     user_fov_list: Vec<Viewport>,
     current_cache_level: CacheLevel,
+    level_two_width: usize,
+    level_two_height: usize,
 }
 
 #[derive(Deserialize, Debug)]
@@ -49,7 +62,7 @@ fn read_json_cluster_from_file<P: AsRef<Path>>(path: P) -> Result<Vec<VideoObjec
 
 
 impl Simulator {
-    pub fn new(user_file: &String, dump_file: &String, cluster_json: &String, threshold: f32, segment: usize, fov_width: usize, fov_height: usize) -> Self {
+    pub fn new(user_file: &String, dump_file: &String, cluster_json: &String, threshold: f32, segment: usize, fov_width: usize, fov_height: usize, level_two_width: usize, level_two_height: usize) -> Self {
         let mut sim = Simulator {
             user_file: user_file.to_string(),
             dump_file: dump_file.to_string(),
@@ -61,6 +74,8 @@ impl Simulator {
             path_list: vec![],
             user_fov_list: vec![],
             current_cache_level: CacheLevel::LevelOne,
+            level_two_width,
+            level_two_height,
         };
         sim.parse_tracing_to_path_list();
         sim.parse_user_data();
@@ -148,13 +163,75 @@ impl Simulator {
 //        println!("{:?}", self.user_fov_list);
     }
 
+    fn compare_from_level_one(&self, fov: &Viewport, user_fov: &Viewport, index: usize, path: usize, width: usize, height: usize) -> (Hit, CacheLevel) {
+        let ratio = fov.get_cover_result(user_fov);
+        let hit: Hit;
+        if ratio >= self.threshold {
+            println!("L1 hit {} at {}", index, ratio);
+            hit = Hit {
+                index,
+                ratio,
+                cache_level: CacheLevel::LevelOne,
+                path,
+                width,
+                height,
+            };
+            (hit, CacheLevel::LevelOne)
+        } else {
+            self.compare_from_level_two(&fov, &user_fov, index, path)
+        }
+    }
+
+    fn compare_from_level_two(&self, fov: &Viewport, user_fov: &Viewport, index: usize, path: usize) -> (Hit, CacheLevel) {
+        let level_one_ratio = fov.get_cover_result(user_fov);
+        let hit: Hit;
+        println!("L1 miss {} at {}", index, level_one_ratio);
+        let level_two_viewport = Viewport::create_new_with_size(&fov, self.level_two_width, self.level_two_height);
+        let level_two_ratio = level_two_viewport.get_cover_result(user_fov);
+        if level_two_ratio >= self.threshold {
+            println!("L2 hit {} at {}", index, level_two_ratio);
+            hit = Hit {
+                index,
+                ratio: level_two_ratio,
+                cache_level: CacheLevel::LevelTwo,
+                path,
+                width: self.level_two_width,
+                height: self.level_two_height,
+            };
+            (hit, CacheLevel::LevelTwo)
+        } else {
+            if level_two_ratio < level_one_ratio {
+                println!("L2 miss {} at {}", index, level_two_ratio);
+                println!("l1 {:?}", fov);
+                println!("l2 {:?}", level_two_viewport);
+                println!("user {:?}", user_fov);
+                assert!(false);
+            }
+            self.compare_from_level_three(index, path)
+        }
+    }
+
+    fn compare_from_level_three(&self, index: usize, path: usize) -> (Hit, CacheLevel) {
+        let hit: Hit;
+        hit = Hit {
+            index,
+            ratio: 1.0,
+            cache_level: CacheLevel::LevelThree,
+            path,
+            width: 3840,
+            height: 2160,
+        };
+        (hit, CacheLevel::LevelThree)
+    }
+
     pub fn hierarchical_simulate(&self) {
-        let current_path: Option<usize> = None;
+        let mut current_path: Option<usize> = None;
+        let mut current_cache_level = CacheLevel::LevelOne;
         for (k, user_fov) in self.user_fov_list.iter().enumerate() {
             let mut max_ratio: f32 = f32::NEG_INFINITY;
             let mut max_ratio_path: Option<usize> = None;
             let mut temp_viewport: Option<&Viewport> = None;
-            let width= self.fov_width;
+            let width = self.fov_width;
             let height = self.fov_height;
 
             for (path, path_viewport) in self.path_list[k].iter().enumerate() {
@@ -165,7 +242,11 @@ impl Simulator {
                     temp_viewport = Some(path_viewport);
                 }
             }
-            println!("k: {}, path: {}, ratio: {}", k, max_ratio_path.unwrap(), max_ratio);
+//            println!("k: {}, path: {}, ratio: {}", k, max_ratio_path.unwrap(), max_ratio);
+            let hit: Hit;
+            if k % self.segment == 0 {
+                let (hit, current_cache_level) = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height);
+            } else {}
         }
     }
 }
