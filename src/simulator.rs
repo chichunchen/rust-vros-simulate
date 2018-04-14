@@ -37,7 +37,6 @@ pub struct Simulator {
     fov_height: usize,
     path_list: Vec<Vec<Viewport>>,
     user_fov_list: Vec<Viewport>,
-    current_cache_level: CacheLevel,
     level_two_width: usize,
     level_two_height: usize,
     hit_list: Vec<Hit>,
@@ -74,7 +73,6 @@ impl Simulator {
             fov_height,
             path_list: vec![],
             user_fov_list: vec![],
-            current_cache_level: CacheLevel::LevelOne,
             level_two_width,
             level_two_height,
             hit_list: vec![],
@@ -93,10 +91,7 @@ impl Simulator {
         let mut frame_list: Vec<Frame> = vec![];
 
         for line in buf_reader.lines() {
-            let line = match line {
-                Ok(T) => T,
-                Err(_) => return (),
-            };
+            let line = line.unwrap();
             let id_vec: Vec<&str> = line.split(" ").collect();
             frame_id = (&id_vec[0]).parse::<i32>().unwrap();
             let object_id = (&id_vec[1]).parse::<i32>().unwrap();
@@ -169,7 +164,7 @@ impl Simulator {
         let ratio = fov.get_cover_result(user_fov);
         let hit: Hit;
         if ratio >= self.threshold {
-            println!("L1 hit {} at {}", index, ratio);
+//            println!("L1 hit {} at {}", index, ratio);
             hit = Hit {
                 index,
                 ratio,
@@ -180,7 +175,7 @@ impl Simulator {
             };
             (hit, CacheLevel::LevelOne)
         } else {
-            println!("L1 miss {} at {}", index, ratio);
+//            println!("L1 miss {} at {}", index, ratio);
             self.compare_from_level_two(&fov, &user_fov, index, path)
         }
     }
@@ -191,7 +186,7 @@ impl Simulator {
         let level_two_viewport = Viewport::create_new_with_size(&fov, self.level_two_width, self.level_two_height);
         let level_two_ratio = level_two_viewport.get_cover_result(user_fov);
         if level_two_ratio >= self.threshold {
-            println!("L2 hit {} at {}", index, level_two_ratio);
+//            println!("L2 hit {} at {}", index, level_two_ratio);
             hit = Hit {
                 index,
                 ratio: level_two_ratio,
@@ -202,8 +197,9 @@ impl Simulator {
             };
             (hit, CacheLevel::LevelTwo)
         } else {
-            println!("L2 miss {} at {}", index, level_two_ratio);
+//            println!("L2 miss {} at {}", index, level_two_ratio);
             if level_two_ratio < level_one_ratio {
+                println!("index: {}, l1 ratio: {}, l2 ratio: {}", index, level_one_ratio, level_two_ratio);
                 println!("l1 {:?}", fov);
                 println!("l2 {:?}", level_two_viewport);
                 println!("user {:?}", user_fov);
@@ -214,7 +210,7 @@ impl Simulator {
     }
 
     fn compare_from_level_three(&self, index: usize, path: usize) -> (Hit, CacheLevel) {
-        println!("L3 hit {} at {}", index, 1);
+//        println!("L3 hit {} at {}", index, 1);
         let hit: Hit;
         hit = Hit {
             index,
@@ -283,5 +279,19 @@ impl Simulator {
         }
         assert_eq!(self.hit_list.len(), self.user_fov_list.len());
 //        println!("{:?}", self.hit_list);
+        self.get_hit_ratio();
+    }
+
+    pub fn get_hit_ratio(&self) -> (usize, usize, usize) {
+        let mut level_1_count = 0;
+        let mut level_2_count = 0;
+        let mut level_3_count = 0;
+        (&self.hit_list).iter().for_each(|&x| match x.cache_level {
+            CacheLevel::LevelOne => level_1_count += 1,
+            CacheLevel::LevelTwo => level_2_count += 1,
+            CacheLevel::LevelThree => level_3_count += 1,
+        });
+        println!("{} {} {}", level_1_count, level_2_count, level_3_count);
+        (level_1_count, level_2_count, level_3_count)
     }
 }

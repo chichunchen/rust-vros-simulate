@@ -1,4 +1,5 @@
-#[macro_use] extern crate serde_derive;
+#[macro_use]
+extern crate serde_derive;
 
 mod simulator;
 mod ds;
@@ -10,6 +11,7 @@ use std::env;
 use std::path::Path;
 use std::fs::{self};
 use std::io;
+use std::fs::DirEntry;
 
 fn iterate_userfile(p: &Path) -> io::Result<()> {
     if p.is_dir() {
@@ -23,7 +25,7 @@ fn iterate_userfile(p: &Path) -> io::Result<()> {
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let user_file: String = args[1].clone();
+    let object_result = args[1].clone();
     let dump_file: String = args[2].clone();
     let cluster_json: String = args[3].clone();
     let threshold = args[4].parse::<f32>().unwrap();
@@ -33,8 +35,11 @@ fn main() {
     let l2_width = args[8].parse::<usize>().unwrap();
     let l2_height = args[9].parse::<usize>().unwrap();
 
-//    let p: &Path = Path::new(&object_result);
-//    iterate_userfile(p);
-    let mut simulator = Simulator::new(&user_file, &dump_file, &cluster_json, threshold, segment, width, height, l2_width, l2_height);
-    simulator.hierarchical_simulate();
+    for entry in fs::read_dir(Path::new(&object_result)).unwrap() {
+        let dir: DirEntry = entry.unwrap();
+        let user_file = dir.path().to_str().unwrap().to_string();
+        println!("{}", user_file);
+        let mut simulator = Simulator::new(&user_file, &dump_file, &cluster_json, threshold, segment, width, height, l2_width, l2_height);
+        simulator.hierarchical_simulate();
+    }
 }
