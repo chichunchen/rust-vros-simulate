@@ -35,41 +35,59 @@ impl Viewport {
 
     pub fn get_cover_result(&self, user_fov: &Viewport) -> f32 {
         let mut total_x = 0;
-        if (user_fov.x + user_fov.width as i32) <= 3840 && (self.x + self.width as i32) <= 3840 {
-            let left = i32::max(self.x, user_fov.x);
-            let right = i32::min(self.x + self.width as i32, user_fov.x + user_fov.width as i32);
-            if right - left > 0 {
-                total_x = right - left;
-            }
-        } else if user_fov.x + user_fov.width as i32 > 3840 && (self.x + self.width as i32) <= 3840 {
-            if self.x < (user_fov.x + user_fov.width as i32 - 3840) {
-                let left_1 = i32::max(self.x, 0);
-                let right_1 = i32::min(self.x + self.width as i32, user_fov.x + user_fov.width as i32 - 3840);
-                total_x += right_1 - left_1;
-            }
-            if self.x + self.width as i32 > user_fov.x {
-                let left_2 = user_fov.x;
-                let right_2 = self.x + self.width as i32;
-                total_x += right_2 - left_2;
-            }
-        } else if (user_fov.x + user_fov.width as i32) <= 3840 && (self.x + self.width as i32) > 3840 {
-            if self.x + self.width as i32 - 3840 > user_fov.x {
-                let left = user_fov.x;
-                let right = i32::min(self.x + self.width as i32 - 3840, user_fov.x + user_fov.width as i32);
-                total_x += right - left;
-            }
-            if (user_fov.x + user_fov.width as i32) > self.x {
-                let left = i32::max(self.x, user_fov.x);
-                let right = i32::min(3840, user_fov.x + user_fov.width as i32);
-                total_x += right - left;
-            }
-        } else if self.x + self.width as i32 > 3840 && user_fov.x + user_fov.width as i32 > 3840 {
-            let left_1 = 0;
-            let right_1 = i32::min(self.x + self.width as i32 - 3840, user_fov.x + user_fov.width as i32 - 3840);
-            total_x += right_1 - left_1;
-            let left_2 = i32::max(self.x, user_fov.x);
-            let right_2 = 3840;
-            total_x += right_2 - left_2;
+        let self_rightmost = self.x + self.width as i32;
+        let user_rightmost = user_fov.x + user_fov.width as i32;
+        match self_rightmost {
+            n if n > 3840 => {
+                match user_rightmost {
+                    m if m > 3840 => {
+                        let left_1 = 0;
+                        let right_1 = i32::min(self_rightmost - 3840, user_rightmost - 3840);
+                        total_x += right_1 - left_1;
+                        let left_2 = i32::max(self.x, user_fov.x);
+                        let right_2 = 3840;
+                        total_x += right_2 - left_2;
+                    },
+                    m if m <= 3840 && m >= 0 => {
+                        if self.x + self.width as i32 - 3840 > user_fov.x {
+                            let left = user_fov.x;
+                            let right = i32::min(self_rightmost - 3840, user_rightmost);
+                            total_x += right - left;
+                        }
+                        if (user_fov.x + user_fov.width as i32) > self.x {
+                            let left = i32::max(self.x, user_fov.x);
+                            let right = i32::min(3840, user_rightmost);
+                            total_x += right - left;
+                        }
+                    },
+                    _ => assert!(false),
+                }
+            },
+            n if n <= 3840 && n >= 0 => {
+                match user_rightmost {
+                    m if m > 3840 => {
+                        if self.x < (user_rightmost - 3840) {
+                            let left_1 = i32::max(self.x, 0);
+                            let right_1 = i32::min(self_rightmost, user_rightmost - 3840);
+                            total_x += right_1 - left_1;
+                        }
+                        if self.x + self.width as i32 > user_fov.x {
+                            let left_2 = user_fov.x;
+                            let right_2 = self_rightmost;
+                            total_x += right_2 - left_2;
+                        }
+                    },
+                    m if m <= 3840 && m >= 0 => {
+                        let left = i32::max(self.x, user_fov.x);
+                        let right = i32::min(self_rightmost, user_rightmost);
+                        if right - left > 0 {
+                            total_x = right - left;
+                        }
+                    },
+                    _ => assert!(false),
+                }
+            },
+            _ => assert!(false),
         }
 
         let bottom = i32::max(self.y, user_fov.y);
