@@ -33,7 +33,7 @@ impl Viewport {
         }
     }
 
-    pub fn get_cover_result(&self, user_fov: &Viewport) -> f32 {
+    pub fn get_cover_result(&self, user_fov: &Viewport) -> f64 {
         let mut total_x = 0;
         let self_rightmost = self.x + self.width as i32;
         let user_rightmost = user_fov.x + user_fov.width as i32;
@@ -98,7 +98,7 @@ impl Viewport {
             i32::abs(top - bottom)
         };
         let total_x = i32::abs(total_x);
-        let ratio: f32 = ((total_x * total_y) as f32 / (user_fov.width * user_fov.height) as f32);
+        let ratio: f64 = ((total_x * total_y) as f64 / (user_fov.width * user_fov.height) as f64);
         if ratio > 1.0 {
             println!("total_x {}", total_x);
             println!("self {:?}", self);

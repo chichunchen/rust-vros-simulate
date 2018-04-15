@@ -4,7 +4,7 @@ use std::io::BufReader;
 use std::fs::File;
 use std::error::Error;
 use std::path::Path;
-use std::f32;
+use std::f64;
 
 extern crate serde_derive;
 extern crate serde;
@@ -20,18 +20,24 @@ enum CacheLevel {
 #[derive(Debug, Copy, Clone)]
 struct Hit {
     index: usize,
-    ratio: f32,
+    ratio: f64,
     path: usize,
     cache_level: CacheLevel,
     width: usize,
     height: usize,
 }
 
+#[derive(Clone, Deserialize, Debug)]
+pub struct PowerConstants {
+    name: String,
+    value: f64,
+}
+
 pub struct Simulator {
     user_file: String,
     dump_file: String,
     cluster_json: String,
-    threshold: f32,
+    threshold: f64,
     segment: usize,
     fov_width: usize,
     fov_height: usize,
@@ -40,6 +46,7 @@ pub struct Simulator {
     level_two_width: usize,
     level_two_height: usize,
     hit_list: Vec<Hit>,
+    power_constant: Vec<PowerConstants>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -60,9 +67,8 @@ fn read_json_cluster_from_file<P: AsRef<Path>>(path: P) -> Result<Vec<VideoObjec
     Ok(u)
 }
 
-
 impl Simulator {
-    pub fn new(user_file: &String, dump_file: &String, cluster_json: &String, threshold: f32, segment: usize, fov_width: usize, fov_height: usize, level_two_width: usize, level_two_height: usize) -> Self {
+    pub fn new(user_file: &String, dump_file: &String, cluster_json: &String, threshold: f64, segment: usize, fov_width: usize, fov_height: usize, level_two_width: usize, level_two_height: usize, power_constants: Vec<PowerConstants>) -> Self {
         let mut sim = Simulator {
             user_file: user_file.to_string(),
             dump_file: dump_file.to_string(),
@@ -76,6 +82,7 @@ impl Simulator {
             level_two_width,
             level_two_height,
             hit_list: vec![],
+            power_constant: power_constants,
         };
         sim.parse_tracing_to_path_list();
         sim.parse_user_data();
@@ -247,7 +254,7 @@ impl Simulator {
             height: 0,
         }, CacheLevel::LevelOne);
         for (k, user_fov) in self.user_fov_list.iter().enumerate() {
-            let mut max_ratio: f32 = f32::NEG_INFINITY;
+            let mut max_ratio: f64 = f64::NEG_INFINITY;
             let mut max_ratio_path: Option<usize> = None;
             let mut temp_viewport: Option<&Viewport> = None;
             let width = self.fov_width;
@@ -305,8 +312,6 @@ impl Simulator {
             }
         }
         assert_eq!(self.hit_list.len(), self.user_fov_list.len());
-//        println!("{:?}", self.hit_list);
-        self.get_hit_counts();
     }
 
     pub fn get_hit_counts(&self) -> Box<[usize; 3]> {
@@ -316,20 +321,84 @@ impl Simulator {
             CacheLevel::LevelTwo => count_arr[1] += 1,
             CacheLevel::LevelThree => count_arr[2] += 1,
         });
-        println!("{:?}", count_arr);
+//        println!("{:?}", count_arr);
         count_arr
     }
 
-    pub fn get_accumulate_hit_ratio(&self) -> Box<[f32; 3]> {
+    pub fn get_hit_ratios(&self) -> Box<[f64; 3]> {
+        let hit_counts = self.get_hit_counts().to_vec();
+        let hit_len = self.hit_list.len();
+        let mut hit_ratios: Box<[f64; 3]> = Box::new([0.0, 0.0, 0.0]);
+        hit_ratios[0] = hit_counts[0] as f64 / hit_len as f64;
+        hit_ratios[1] = hit_counts[1] as f64 / hit_len as f64;
+        hit_ratios[2] = hit_counts[2] as f64 / hit_len as f64;
+        hit_ratios
+    }
+
+    pub fn get_accumulate_hit_ratio(&self) -> Box<[f64; 3]> {
         let hit_len = self.hit_list.len();
         let hit_count_arr = self.get_hit_counts();
-        let mut acc_hit_ratio: Box<[f32; 3]> = Box::new([0.0, 0.0, 0.0]);
-        acc_hit_ratio[0] = hit_count_arr[0] as f32 / hit_len as f32;
-        acc_hit_ratio[1] = acc_hit_ratio[0] + (hit_count_arr[1] as f32 / hit_len as f32);
+        let mut acc_hit_ratio: Box<[f64; 3]> = Box::new([0.0, 0.0, 0.0]);
+        acc_hit_ratio[0] = hit_count_arr[0] as f64 / hit_len as f64;
+        acc_hit_ratio[1] = acc_hit_ratio[0] + (hit_count_arr[1] as f64 / hit_len as f64);
         acc_hit_ratio[2] = 1.0;
-        println!("{:?}", acc_hit_ratio);
+//        println!("{:?}", acc_hit_ratio);
         acc_hit_ratio
     }
 
-    // TODO non-hierarchical hit_ratio
+    pub fn power_consumption(&self) {
+        // extract name from user_file
+        // which for example could be: user_viewport_result/Elephant-training-2bpICIClAIg/uid-a413ecca-3822-47b3-92f3-2e2fbe8470c0.txt
+        let video_name: &str = {
+            let temp_name: &str = self.user_file.split("/").collect::<Vec<_>>()[1];
+            temp_name.split("-").collect::<Vec<_>>()[0]
+        };
+        let mut wifi_name: String = video_name.to_owned().to_string();
+        let mut soc_name: String = video_name.to_owned().to_string();
+        wifi_name.push_str("_WIFI");
+        soc_name.push_str("_SOC");
+
+        // get power constant value
+        let wifi_value = self.power_constant.iter().find(|&x| x.name == wifi_name).unwrap().value;
+        let soc_value = self.power_constant.iter().find(|&x| x.name == soc_name).unwrap().value;
+//            println!("{} {} {} {}", wifi_name, wifi_value, soc_name, soc_value);
+
+        // compute power constant for each level
+        let cache_hit_ratios = self.get_hit_ratios();
+        let level_one_power_constant = wifi_value * self.fov_width as f64 * self.fov_height as f64 / 3840 as f64 / 2160 as f64;
+        let level_two_power_constant = wifi_value * self.level_two_width as f64 * self.level_two_height as f64 / 3840 as f64 / 2160 as f64;
+        let level_three_power_constant = 1.0;
+
+        let mut p_wifi;
+        let mut p_soc;
+        if self.is_hierarchical() {
+            p_wifi = {
+                let first_level = cache_hit_ratios[0] * level_one_power_constant;
+                let second_level = cache_hit_ratios[1] * (level_one_power_constant + level_two_power_constant);
+                let third_level = cache_hit_ratios[2] * (level_one_power_constant + level_two_power_constant + level_three_power_constant);
+                first_level + second_level + third_level
+            };
+            p_soc = {
+                let first_level = cache_hit_ratios[0] * level_one_power_constant;
+                let second_level = cache_hit_ratios[1] * level_two_power_constant;
+                let third_level = cache_hit_ratios[2] * level_three_power_constant;
+                first_level + second_level + third_level
+            };
+        } else {
+            p_wifi = {
+                let first_level = cache_hit_ratios[0] * level_one_power_constant;
+                let third_level = cache_hit_ratios[2] * (level_one_power_constant + level_three_power_constant);
+                assert_eq!(cache_hit_ratios[1], 0.0);
+                first_level + third_level
+            };
+            p_soc = {
+                let first_level = cache_hit_ratios[0] * level_one_power_constant;
+                let third_level = cache_hit_ratios[2] * level_three_power_constant;
+                assert_eq!(cache_hit_ratios[1], 0.0);
+                first_level + third_level
+            };
+        }
+
+        println!("wifi: {} soc: {}", p_wifi, p_soc);
+    }
 }

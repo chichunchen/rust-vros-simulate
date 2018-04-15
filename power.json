@@ -1,0 +1,58 @@
+[
+  {
+    "name": "Diving_WIFI",
+    "value": 318.00226813811946
+  },
+  {
+    "name": "Diving_SOC",
+    "value": 413.879251255758
+  },
+  {
+    "name": "Elephant_WIFI",
+    "value": 339.1666451915568
+  },
+  {
+    "name": "Elephant_SOC",
+    "value": 421.98720341138164
+  },
+  {
+    "name": "Timelapse_WIFI",
+    "value": 363.48917325961816
+  },
+  {
+    "name": "Timelapse_SOC",
+    "value": 428.79898676231664
+  },
+  {
+    "name": "Paris_WIFI",
+    "value": 340.9737077445327
+  },
+  {
+    "name": "Paris_WIFI",
+    "value": 441.1366943361443
+  },
+  {
+    "name": "Rhino_WIFI",
+    "value": 374.4932490907908
+  },
+  {
+    "name": "Rhino_SOC",
+    "value": 418.387345119841
+  },
+  {
+    "name": "Rollercoaster_WIFI",
+    "value": 293.33422968845827
+  },
+  {
+    "name": "Rollercoaster_SOC",
+    "value": 374.93652744537303
+  },
+  {
+    "name": "Venice_WIFI",
+    "value": 317.1256150044853
+  },
+  {
+    "name": "Venice_SOC",
+    "value": 380.75382076962484
+  }
+]
