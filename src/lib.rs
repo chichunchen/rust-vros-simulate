@@ -50,6 +50,7 @@ fn main() {
         simulator.power_consumption();
         let mut simulator_base = Simulator::new(&user_file, &dump_file, &cluster_json, threshold, segment, width, height, width, height, power_constant.clone());
         simulator_base.simulate();
+        simulator_base.power_consumption();
         println!("hier: {:?}, baseline: {:?}", simulator.get_hit_ratios(), simulator_base.get_hit_ratios());
     }
 }

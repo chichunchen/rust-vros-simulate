@@ -275,6 +275,8 @@ impl Simulator {
                 self.hit_list.push(hit_cache_pair.0.clone());
             } else {
 //                println!("k: {}, path: {}, ratio: {}", k, max_ratio_path.unwrap(), max_ratio);
+
+                // non-hierarchical
                 if self.fov_width == self.level_two_width && self.fov_height == self.level_two_height {
                     match hit_cache_pair.1 {
                         CacheLevel::LevelOne => {
@@ -288,6 +290,7 @@ impl Simulator {
                         CacheLevel::LevelThree => hit_cache_pair = self.compare_from_level_three(k, current_path.unwrap()),
                     }
                 } else {
+                    // hierarchical
                     match hit_cache_pair.1 {
                         CacheLevel::LevelOne => {
                             if current_path == max_ratio_path {
@@ -365,35 +368,38 @@ impl Simulator {
 
         // compute power constant for each level
         let cache_hit_ratios = self.get_hit_ratios();
-        let level_one_power_constant = wifi_value * self.fov_width as f64 * self.fov_height as f64 / 3840 as f64 / 2160 as f64;
-        let level_two_power_constant = wifi_value * self.level_two_width as f64 * self.level_two_height as f64 / 3840 as f64 / 2160 as f64;
-        let level_three_power_constant = 1.0;
+        let wifi_level_one_power_constant = wifi_value * self.fov_width as f64 * self.fov_height as f64 / 3840 as f64 / 2160 as f64;
+        let wifi_level_two_power_constant = wifi_value * self.level_two_width as f64 * self.level_two_height as f64 / 3840 as f64 / 2160 as f64;
+        let wifi_level_three_power_constant = wifi_value;
+        let soc_level_one_power_constant = soc_value * self.fov_width as f64 * self.fov_height as f64 / 3840 as f64 / 2160 as f64;
+        let soc_level_two_power_constant = soc_value * self.level_two_width as f64 * self.level_two_height as f64 / 3840 as f64 / 2160 as f64;
+        let soc_level_three_power_constant = soc_value;
 
         let mut p_wifi;
         let mut p_soc;
         if self.is_hierarchical() {
             p_wifi = {
-                let first_level = cache_hit_ratios[0] * level_one_power_constant;
-                let second_level = cache_hit_ratios[1] * (level_one_power_constant + level_two_power_constant);
-                let third_level = cache_hit_ratios[2] * (level_one_power_constant + level_two_power_constant + level_three_power_constant);
+                let first_level = cache_hit_ratios[0] * wifi_level_one_power_constant;
+                let second_level = cache_hit_ratios[1] * (wifi_level_one_power_constant + wifi_level_two_power_constant);
+                let third_level = cache_hit_ratios[2] * (wifi_level_one_power_constant + wifi_level_two_power_constant + wifi_level_three_power_constant);
                 first_level + second_level + third_level
             };
             p_soc = {
-                let first_level = cache_hit_ratios[0] * level_one_power_constant;
-                let second_level = cache_hit_ratios[1] * level_two_power_constant;
-                let third_level = cache_hit_ratios[2] * level_three_power_constant;
+                let first_level = cache_hit_ratios[0] * soc_level_one_power_constant;
+                let second_level = cache_hit_ratios[1] * soc_level_two_power_constant;
+                let third_level = cache_hit_ratios[2] * soc_level_three_power_constant;
                 first_level + second_level + third_level
             };
         } else {
             p_wifi = {
-                let first_level = cache_hit_ratios[0] * level_one_power_constant;
-                let third_level = cache_hit_ratios[2] * (level_one_power_constant + level_three_power_constant);
+                let first_level = cache_hit_ratios[0] * wifi_level_one_power_constant;
+                let third_level = cache_hit_ratios[2] * (wifi_level_one_power_constant + wifi_level_three_power_constant);
                 assert_eq!(cache_hit_ratios[1], 0.0);
                 first_level + third_level
             };
             p_soc = {
-                let first_level = cache_hit_ratios[0] * level_one_power_constant;
-                let third_level = cache_hit_ratios[2] * level_three_power_constant;
+                let first_level = cache_hit_ratios[0] * soc_level_one_power_constant;
+                let third_level = cache_hit_ratios[2] * soc_level_three_power_constant;
                 assert_eq!(cache_hit_ratios[1], 0.0);
                 first_level + third_level
             };
