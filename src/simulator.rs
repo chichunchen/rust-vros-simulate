@@ -444,6 +444,6 @@ impl Simulator {
             };
         }
 
-        println!("wifi: {} soc: {}", p_wifi, p_soc);
+        println!("{} {}", p_wifi, p_soc);
     }
 }

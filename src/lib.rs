@@ -42,7 +42,7 @@ fn main() {
     user_paths.sort_by_key(|dir| dir.path());
     for path in user_paths {
         let user_file = path.path().to_str().unwrap().to_string();
-        println!("{}", user_file);
+//        println!("{}", user_file);
 
         let mut simulator = Simulator::new(&user_file, &dump_file, &cluster_json, threshold, segment, width, height, l2_width, l2_height, power_constant.clone(), false);
         simulator.simulate();
@@ -53,6 +53,6 @@ fn main() {
         let mut simulator_opt = Simulator::new(&user_file, &dump_file, &cluster_json, threshold, segment, width, height, l2_width, l2_height, power_constant.clone(), true);
         simulator_opt.simulate();
         simulator_opt.power_consumption();
-        println!("hier: {:?}, baseline: {:?}, opt: {:?}", simulator.get_hit_ratios(), simulator_base.get_hit_ratios(), simulator_opt.get_hit_ratios());
+//        println!("hier: {:?}, baseline: {:?}, opt: {:?}", simulator.get_hit_ratios(), simulator_base.get_hit_ratios(), simulator_opt.get_hit_ratios());
     }
 }
