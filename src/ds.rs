@@ -1,10 +1,10 @@
 #[derive(Debug, Copy, Clone)]
 pub struct Viewport {
     conf: i32,
-    x: i32,
-    y: i32,
-    width: usize,
-    height: usize,
+    pub x: i32,
+    pub y: i32,
+    pub width: usize,
+    pub height: usize,
 }
 
 impl Viewport {

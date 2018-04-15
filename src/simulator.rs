@@ -47,6 +47,8 @@ pub struct Simulator {
     level_two_height: usize,
     hit_list: Vec<Hit>,
     power_constant: Vec<PowerConstants>,
+    opt_flag: bool,
+    ignored_level_two: usize,
 }
 
 #[derive(Deserialize, Debug)]
@@ -68,7 +70,7 @@ fn read_json_cluster_from_file<P: AsRef<Path>>(path: P) -> Result<Vec<VideoObjec
 }
 
 impl Simulator {
-    pub fn new(user_file: &String, dump_file: &String, cluster_json: &String, threshold: f64, segment: usize, fov_width: usize, fov_height: usize, level_two_width: usize, level_two_height: usize, power_constants: Vec<PowerConstants>) -> Self {
+    pub fn new(user_file: &String, dump_file: &String, cluster_json: &String, threshold: f64, segment: usize, fov_width: usize, fov_height: usize, level_two_width: usize, level_two_height: usize, power_constants: Vec<PowerConstants>, opt_flag: bool) -> Self {
         let mut sim = Simulator {
             user_file: user_file.to_string(),
             dump_file: dump_file.to_string(),
@@ -83,6 +85,8 @@ impl Simulator {
             level_two_height,
             hit_list: vec![],
             power_constant: power_constants,
+            opt_flag,
+            ignored_level_two: 0,
         };
         sim.parse_tracing_to_path_list();
         sim.parse_user_data();
@@ -167,7 +171,7 @@ impl Simulator {
 //        println!("{:?}", self.user_fov_list);
     }
 
-    fn compare_from_level_one(&self, fov: &Viewport, user_fov: &Viewport, index: usize, path: usize, width: usize, height: usize) -> (Hit, CacheLevel) {
+    fn compare_from_level_one(&self, fov: &Viewport, user_fov: &Viewport, index: usize, path: usize, width: usize, height: usize, ignored_level_two: &mut usize) -> (Hit, CacheLevel) {
         let ratio = fov.get_cover_result(user_fov);
         let hit: Hit;
         if ratio >= self.threshold {
@@ -184,14 +188,14 @@ impl Simulator {
         } else {
 //            println!("L1 miss {} at {}", index, ratio);
             if self.is_hierarchical() {
-                self.compare_from_level_two(&fov, &user_fov, index, path)
+                self.compare_from_level_two(&fov, &user_fov, index, path, ignored_level_two)
             } else {
-                self.compare_from_level_three(index, path)
+                self.compare_from_level_three(index, path, ignored_level_two)
             }
         }
     }
 
-    fn compare_from_level_two(&self, fov: &Viewport, user_fov: &Viewport, index: usize, path: usize) -> (Hit, CacheLevel) {
+    fn compare_from_level_two(&self, fov: &Viewport, user_fov: &Viewport, index: usize, path: usize, ignored_level_two: &mut usize) -> (Hit, CacheLevel) {
         let level_one_ratio = fov.get_cover_result(user_fov);
         let hit: Hit;
         let level_two_viewport = Viewport::create_new_with_size(&fov, self.level_two_width, self.level_two_height);
@@ -208,6 +212,14 @@ impl Simulator {
             };
             (hit, CacheLevel::LevelTwo)
         } else {
+            if self.opt_flag {
+                let predict_ratio = ((fov.x + fov.width as i32 - user_fov.x) as f64 * (user_fov.y + user_fov.height as i32 - fov.y) as f64) / (level_two_viewport.width as f64 * level_two_viewport.height as f64);
+//                println!("ratio: {} {:?} {:?} {:?}", predict_ratio, fov, level_two_viewport, user_fov);
+                if predict_ratio < self.threshold {
+                    *ignored_level_two += 1;
+                }
+            }
+
 //            println!("L2 miss {} at {}", index, level_two_ratio);
             if level_two_ratio < level_one_ratio {
                 println!("index: {}, l1 ratio: {}, l2 ratio: {}", index, level_one_ratio, level_two_ratio);
@@ -216,11 +228,11 @@ impl Simulator {
                 println!("user {:?}", user_fov);
                 assert!(false);
             }
-            self.compare_from_level_three(index, path)
+            self.compare_from_level_three(index, path, ignored_level_two)
         }
     }
 
-    fn compare_from_level_three(&self, index: usize, path: usize) -> (Hit, CacheLevel) {
+    fn compare_from_level_three(&self, index: usize, path: usize, ignored_level_two: &mut usize) -> (Hit, CacheLevel) {
 //        println!("L3 hit {} at {}", index, 1);
         let hit: Hit;
         hit = Hit {
@@ -245,6 +257,7 @@ impl Simulator {
     // simulate with hierarchical or non-hierarchical with segment and threshold implicitly
     pub fn simulate(&mut self) {
         let mut current_path: Option<usize> = None;
+        let mut local_ignored_level_two: usize = 0;
         let mut hit_cache_pair: (Hit, CacheLevel) = (Hit {
             index: 0,
             ratio: 0.0,
@@ -271,8 +284,7 @@ impl Simulator {
 
             if k % self.segment == 0 {
                 current_path = max_ratio_path;
-                hit_cache_pair = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height);
-                self.hit_list.push(hit_cache_pair.0.clone());
+                hit_cache_pair = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height, &mut local_ignored_level_two);
             } else {
 //                println!("k: {}, path: {}, ratio: {}", k, max_ratio_path.unwrap(), max_ratio);
 
@@ -281,40 +293,44 @@ impl Simulator {
                     match hit_cache_pair.1 {
                         CacheLevel::LevelOne => {
                             if current_path == max_ratio_path {
-                                hit_cache_pair = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height);
+                                hit_cache_pair = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height, &mut local_ignored_level_two);
                             } else {
-                                hit_cache_pair = self.compare_from_level_three(k, max_ratio_path.unwrap());
+                                hit_cache_pair = self.compare_from_level_three(k, max_ratio_path.unwrap(), &mut local_ignored_level_two);
                             }
                         }
                         CacheLevel::LevelTwo => assert!(false),
-                        CacheLevel::LevelThree => hit_cache_pair = self.compare_from_level_three(k, current_path.unwrap()),
+                        CacheLevel::LevelThree => hit_cache_pair = self.compare_from_level_three(k, current_path.unwrap(), &mut local_ignored_level_two),
                     }
                 } else {
                     // hierarchical
                     match hit_cache_pair.1 {
                         CacheLevel::LevelOne => {
                             if current_path == max_ratio_path {
-                                hit_cache_pair = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height);
+                                hit_cache_pair = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height, &mut local_ignored_level_two);
                             } else {
-                                hit_cache_pair = self.compare_from_level_three(k, max_ratio_path.unwrap());
+                                hit_cache_pair = self.compare_from_level_three(k, max_ratio_path.unwrap(), &mut local_ignored_level_two);
                             }
                         }
                         CacheLevel::LevelTwo => {
                             if current_path == max_ratio_path {
-                                hit_cache_pair = self.compare_from_level_two(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap());
+                                hit_cache_pair = self.compare_from_level_two(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), &mut local_ignored_level_two);
                             } else {
-                                hit_cache_pair = self.compare_from_level_three(k, current_path.unwrap());
+                                hit_cache_pair = self.compare_from_level_three(k, current_path.unwrap(), &mut local_ignored_level_two);
                             }
                         }
                         CacheLevel::LevelThree => {
-                            hit_cache_pair = self.compare_from_level_three(k, current_path.unwrap());
+                            hit_cache_pair = self.compare_from_level_three(k, current_path.unwrap(), &mut local_ignored_level_two);
                         }
                     }
                 }
-                self.hit_list.push(hit_cache_pair.0.clone());
             }
+            self.hit_list.push(hit_cache_pair.0.clone());
+            self.ignored_level_two += local_ignored_level_two;
+            local_ignored_level_two = 0;
         }
         assert_eq!(self.hit_list.len(), self.user_fov_list.len());
+//        TODO check if ignored level two is correct
+//        println!("ignore level two {}", self.ignored_level_two);
     }
 
     pub fn get_hit_counts(&self) -> Box<[usize; 3]> {
@@ -334,6 +350,16 @@ impl Simulator {
         let mut hit_ratios: Box<[f64; 3]> = Box::new([0.0, 0.0, 0.0]);
         hit_ratios[0] = hit_counts[0] as f64 / hit_len as f64;
         hit_ratios[1] = hit_counts[1] as f64 / hit_len as f64;
+        hit_ratios[2] = hit_counts[2] as f64 / hit_len as f64;
+        hit_ratios
+    }
+
+    pub fn get_adjusted_hit_ratios(&self) -> Box<[f64; 3]> {
+        let hit_counts = self.get_hit_counts().to_vec();
+        let hit_len = self.hit_list.len();
+        let mut hit_ratios: Box<[f64; 3]> = Box::new([0.0, 0.0, 0.0]);
+        hit_ratios[0] = hit_counts[0] as f64 / hit_len as f64;
+        hit_ratios[1] = (hit_counts[1] - self.ignored_level_two) as f64 / hit_len as f64;
         hit_ratios[2] = hit_counts[2] as f64 / hit_len as f64;
         hit_ratios
     }
@@ -377,11 +403,24 @@ impl Simulator {
 
         let mut p_wifi;
         let mut p_soc;
-        if self.is_hierarchical() {
+        if self.is_hierarchical() && (!self.opt_flag) {
             p_wifi = {
                 let first_level = cache_hit_ratios[0] * wifi_level_one_power_constant;
                 let second_level = cache_hit_ratios[1] * (wifi_level_one_power_constant + wifi_level_two_power_constant);
                 let third_level = cache_hit_ratios[2] * (wifi_level_one_power_constant + wifi_level_two_power_constant + wifi_level_three_power_constant);
+                first_level + second_level + third_level
+            };
+            p_soc = {
+                let first_level = cache_hit_ratios[0] * soc_level_one_power_constant;
+                let second_level = cache_hit_ratios[1] * soc_level_two_power_constant;
+                let third_level = cache_hit_ratios[2] * soc_level_three_power_constant;
+                first_level + second_level + third_level
+            };
+        } else if self.is_hierarchical() && self.opt_flag {
+            p_wifi = {
+                let first_level = cache_hit_ratios[0] * wifi_level_one_power_constant;
+                let second_level = cache_hit_ratios[1] * (wifi_level_one_power_constant + wifi_level_two_power_constant);
+                let third_level = cache_hit_ratios[2] * (wifi_level_one_power_constant + wifi_level_three_power_constant);
                 first_level + second_level + third_level
             };
             p_soc = {

@@ -44,13 +44,15 @@ fn main() {
         let user_file = path.path().to_str().unwrap().to_string();
         println!("{}", user_file);
 
-        let mut simulator = Simulator::new(&user_file, &dump_file, &cluster_json, threshold, segment, width, height, l2_width, l2_height, power_constant.clone());
+        let mut simulator = Simulator::new(&user_file, &dump_file, &cluster_json, threshold, segment, width, height, l2_width, l2_height, power_constant.clone(), false);
         simulator.simulate();
-        simulator.get_hit_ratios();
         simulator.power_consumption();
-        let mut simulator_base = Simulator::new(&user_file, &dump_file, &cluster_json, threshold, segment, width, height, width, height, power_constant.clone());
+        let mut simulator_base = Simulator::new(&user_file, &dump_file, &cluster_json, threshold, segment, width, height, width, height, power_constant.clone(), false);
         simulator_base.simulate();
         simulator_base.power_consumption();
-        println!("hier: {:?}, baseline: {:?}", simulator.get_hit_ratios(), simulator_base.get_hit_ratios());
+        let mut simulator_opt = Simulator::new(&user_file, &dump_file, &cluster_json, threshold, segment, width, height, l2_width, l2_height, power_constant.clone(), true);
+        simulator_opt.simulate();
+        simulator_opt.power_consumption();
+        println!("hier: {:?}, baseline: {:?}, opt: {:?}", simulator.get_hit_ratios(), simulator_base.get_hit_ratios(), simulator_opt.get_hit_ratios());
     }
 }
