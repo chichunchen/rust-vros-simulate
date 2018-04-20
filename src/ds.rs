@@ -98,7 +98,7 @@ impl Viewport {
             i32::abs(top - bottom)
         };
         let total_x = i32::abs(total_x);
-        let ratio: f64 = ((total_x * total_y) as f64 / (user_fov.width * user_fov.height) as f64);
+        let ratio: f64 = (total_x * total_y) as f64 / (user_fov.width * user_fov.height) as f64;
         if ratio > 1.0 {
             println!("total_x {}", total_x);
             println!("self {:?}", self);

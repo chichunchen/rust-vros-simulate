@@ -10,8 +10,6 @@ pub use ds::{Viewport, Frame};
 use std::env;
 use std::path::Path;
 use std::fs::{self};
-use std::io;
-use std::fs::DirEntry;
 use std::fs::File;
 use std::error::Error;
 
@@ -24,6 +22,7 @@ fn read_power_consumption_from_file<P: AsRef<Path>>(path: P) -> Result<Vec<Power
     Ok(u)
 }
 
+#[allow(dead_code)]
 fn main() {
     let args: Vec<String> = env::args().collect();
     let object_result = args[1].clone();
@@ -53,6 +52,6 @@ fn main() {
         let mut simulator_opt = Simulator::new(&user_file, &dump_file, &cluster_json, threshold, segment, width, height, l2_width, l2_height, power_constant.clone(), true);
         simulator_opt.simulate();
         simulator_opt.power_consumption();
-//        println!("hier: {:?}, baseline: {:?}, opt: {:?}", simulator.get_hit_ratios(), simulator_base.get_hit_ratios(), simulator_opt.get_hit_ratios());
+        println!("l1-l2-hier: {:?}, l1-only: {:?}, l1-l2-opt-hier: {:?}", simulator.get_hit_ratios(), simulator_base.get_hit_ratios(), simulator_opt.get_hit_ratios());
     }
 }
