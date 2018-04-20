@@ -48,6 +48,8 @@ pub struct Simulator {
     power_constant: Vec<PowerConstants>,
     opt_flag: bool,
     ignored_level_two: usize,
+    wifi_pc: f64,
+    soc_pc: f64,
 }
 
 #[derive(Deserialize, Debug)]
@@ -86,6 +88,8 @@ impl Simulator {
             power_constant: power_constants,
             opt_flag,
             ignored_level_two: 0,
+            wifi_pc: 0.0,
+            soc_pc: 0.0,
         };
         sim.parse_tracing_to_path_list();
         sim.parse_user_data();
@@ -331,7 +335,10 @@ impl Simulator {
             self.ignored_level_two += local_ignored_level_two;
         }
         assert_eq!(self.hit_list.len(), self.user_fov_list.len());
-        println!("The amount of level two that is ignored {}, total level-three {:?}", self.ignored_level_two, self.get_hit_counts()[2]);
+//        println!("The amount of level two that is ignored {}, total level-three {:?}", self.ignored_level_two, self.get_hit_counts()[2]);
+
+        // fill wifi_pc and soc_pc
+        self.power_consumption();
     }
 
     pub fn get_hit_counts(&self) -> Box<[usize; 3]> {
@@ -366,7 +373,7 @@ impl Simulator {
         acc_hit_ratio
     }
 
-    pub fn power_consumption(&self) {
+    pub fn power_consumption(&mut self) {
         // extract name from user_file
         // which for example could be: user_viewport_result/Elephant-training-2bpICIClAIg/uid-a413ecca-3822-47b3-92f3-2e2fbe8470c0.txt
         let video_name: &str = {
@@ -438,6 +445,19 @@ impl Simulator {
             };
         }
 
-        println!("{} {}", p_wifi, p_soc);
+        self.wifi_pc = p_wifi;
+        self.soc_pc = p_soc;
+    }
+
+    pub fn print_power_consumption(&self) {
+        println!("{} {}", self.wifi_pc, self.soc_pc);
+    }
+
+    pub fn get_wifi_pc(&self) -> f64 {
+        self.wifi_pc
+    }
+
+    pub fn get_soc_pc(&self) -> f64 {
+        self.soc_pc
     }
 }
