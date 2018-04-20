@@ -1,0 +1,4 @@
+[submodule "vros-dataset"]
+	path = vros-dataset
+	url = https://github.com/horizon-research/vros-dataset.git
+	branch = master
