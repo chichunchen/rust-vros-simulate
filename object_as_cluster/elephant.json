@@ -1,13 +1,13 @@
 [
   {
-    "from_start": 1,
-    "from_end": 1744,
+    "frame_start": 1,
+    "frame_end": 1744,
     "size": 6,
     "cluster": [0, 1, 2, 3, 4, 5]
   },
   {
-    "from_start": 1745,
-    "from_end": 4644,
+    "frame_start": 1745,
+    "frame_end": 4644,
     "size": 8,
     "cluster": [0, 1, 2, 3, 4, 5, 6, 7]
   }

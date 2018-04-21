@@ -54,8 +54,8 @@ pub struct Simulator {
 
 #[derive(Deserialize, Debug)]
 struct VideoObject {
-    from_start: usize,
-    from_end: usize,
+    frame_start: usize,
+    frame_end: usize,
     size: usize,
     cluster: Vec<usize>,
 }
@@ -131,18 +131,20 @@ impl Simulator {
         // integrate cluster_json and trace dump
         let video_objects = read_json_cluster_from_file(&self.cluster_json).unwrap();
         for video_object in video_objects {
-            // -1 is for normalize the start id in trace dump file to 0
+            // frame_start and frame_end - 1 is for normalize the start id in trace dump file to 0
             // so that we have the same start id as we get from user_view_port_result
-            let start = video_object.from_start - 1;
-            let end = video_object.from_end - 1;
+            let start = video_object.frame_start - 1;
+            let end = video_object.frame_end - 1;
             let mut _frame_id = start;
             let mut path: Vec<Viewport> = vec![];
 
             // iterate all the frames from dumping data
             for frame in frame_list[start..end].iter() {
                 for cluster in &video_object.cluster {
-                    let v = frame.traces[*cluster];
-                    path.push(Viewport::create_new_with_size(&v, self.fov_width, self.fov_height));
+                    if *cluster < frame.traces.len() {
+                        let v = frame.traces[*cluster];
+                        path.push(Viewport::create_new_with_size(&v, self.fov_width, self.fov_height));
+                    }
                 }
                 self.path_list.push(path.clone());
                 path.clear();
@@ -168,7 +170,7 @@ impl Simulator {
             let width = (&extract[2]).parse::<usize>().unwrap();
             let height = (&extract[3]).parse::<usize>().unwrap();
             let u_fov = Viewport::new(conf, x, y, width, height);
-            // assume user_viewport file has key start from 0 and add one consecutively
+//            // assume user_viewport file has key start from 0 and add one consecutively
             self.user_fov_list.push(u_fov);
         }
 //        println!("{:?}", self.user_fov_list);
@@ -280,61 +282,62 @@ impl Simulator {
             let height = self.fov_height;
             local_ignored_level_two = 0;
 
-            for (path, path_viewport) in self.path_list[k].iter().enumerate() {
-                let current_ratio = path_viewport.get_cover_result(user_fov);
-                if max_ratio < current_ratio {
-                    max_ratio = current_ratio;
-                    max_ratio_path = Some(path);
-                    temp_viewport = Some(path_viewport);
+            if self.path_list.len() > k {
+                for (path, path_viewport) in self.path_list[k].iter().enumerate() {
+                    let current_ratio = path_viewport.get_cover_result(user_fov);
+                    if max_ratio < current_ratio {
+                        max_ratio = current_ratio;
+                        max_ratio_path = Some(path);
+                        temp_viewport = Some(path_viewport);
+                    }
                 }
-            }
-
-            if k % self.segment == 0 {
-                current_path = max_ratio_path;
-                hit_cache_pair = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height, &mut local_ignored_level_two);
-            } else {
+                if k % self.segment == 0 {
+                    current_path = max_ratio_path;
+                    hit_cache_pair = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height, &mut local_ignored_level_two);
+                } else {
 //                println!("k: {}, path: {}, ratio: {}", k, max_ratio_path.unwrap(), max_ratio);
 
-                // non-hierarchical
-                if self.is_hierarchical() {
-                    // hierarchical
-                    match hit_cache_pair.1 {
-                        CacheLevel::LevelOne => {
-                            if current_path == max_ratio_path {
-                                hit_cache_pair = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height, &mut local_ignored_level_two);
-                            } else {
-                                hit_cache_pair = self.compare_from_level_three(k, max_ratio_path.unwrap());
+                    // non-hierarchical
+                    if self.is_hierarchical() {
+                        // hierarchical
+                        match hit_cache_pair.1 {
+                            CacheLevel::LevelOne => {
+                                if current_path == max_ratio_path {
+                                    hit_cache_pair = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height, &mut local_ignored_level_two);
+                                } else {
+                                    hit_cache_pair = self.compare_from_level_three(k, max_ratio_path.unwrap());
+                                }
                             }
-                        }
-                        CacheLevel::LevelTwo => {
-                            if current_path == max_ratio_path {
-                                hit_cache_pair = self.compare_from_level_two(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap());
-                            } else {
+                            CacheLevel::LevelTwo => {
+                                if current_path == max_ratio_path {
+                                    hit_cache_pair = self.compare_from_level_two(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap());
+                                } else {
+                                    hit_cache_pair = self.compare_from_level_three(k, current_path.unwrap());
+                                }
+                            }
+                            CacheLevel::LevelThree => {
                                 hit_cache_pair = self.compare_from_level_three(k, current_path.unwrap());
                             }
                         }
-                        CacheLevel::LevelThree => {
-                            hit_cache_pair = self.compare_from_level_three(k, current_path.unwrap());
-                        }
-                    }
-                } else {
-                    match hit_cache_pair.1 {
-                        CacheLevel::LevelOne => {
-                            if current_path == max_ratio_path {
-                                hit_cache_pair = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height, &mut local_ignored_level_two);
-                            } else {
-                                hit_cache_pair = self.compare_from_level_three(k, max_ratio_path.unwrap());
+                    } else {
+                        match hit_cache_pair.1 {
+                            CacheLevel::LevelOne => {
+                                if current_path == max_ratio_path {
+                                    hit_cache_pair = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height, &mut local_ignored_level_two);
+                                } else {
+                                    hit_cache_pair = self.compare_from_level_three(k, max_ratio_path.unwrap());
+                                }
                             }
+                            CacheLevel::LevelTwo => assert!(false),
+                            CacheLevel::LevelThree => hit_cache_pair = self.compare_from_level_three(k, current_path.unwrap()),
                         }
-                        CacheLevel::LevelTwo => assert!(false),
-                        CacheLevel::LevelThree => hit_cache_pair = self.compare_from_level_three(k, current_path.unwrap()),
                     }
                 }
+                self.hit_list.push(hit_cache_pair.0.clone());
+                self.ignored_level_two += local_ignored_level_two;
             }
-            self.hit_list.push(hit_cache_pair.0.clone());
-            self.ignored_level_two += local_ignored_level_two;
         }
-        assert_eq!(self.hit_list.len(), self.user_fov_list.len());
+//        assert_eq!(self.hit_list.len(), self.user_fov_list.len());
 //        println!("The amount of level two that is ignored {}, total level-three {:?}", self.ignored_level_two, self.get_hit_counts()[2]);
 
         // fill wifi_pc and soc_pc
