@@ -1,5 +1,3 @@
-#![feature(iterator_step_by)]
-
 #[macro_use]
 extern crate serde_derive;
 
@@ -18,6 +16,23 @@ use std::fs::{self};
 use std::fs::File;
 use std::error::Error;
 use std::fs::DirEntry;
+
+struct PythonFor(isize, isize, isize);
+
+impl Iterator for PythonFor {
+    type Item = isize;
+
+    #[inline]
+    fn next(&mut self) -> Option<isize> {
+        if self.0 < self.1 {
+            let v = self.0;
+            self.0 = v + self.2;
+            Some(v)
+        } else {
+            None
+        }
+    }
+}
 
 fn read_power_consumption_from_file<P: AsRef<Path>>(path: P) -> Result<Vec<PowerConstants>, Box<Error>> {
     let file = File::open(path)?;
@@ -67,9 +82,9 @@ fn batch_simulation(object_result: &String, dump_file: &String, cluster_json: &S
     let mut user_paths: Vec<DirEntry> = fs::read_dir(&object_result).unwrap().map(|r| r.unwrap()).collect();
     user_paths.sort_by_key(|dir| dir.path());
 
-    for screen in (1200..2001).step_by(100) {
-        for level_2 in (2200..3401).step_by(100) {
-            single_simulation(&user_paths, &dump_file, &cluster_json, threshold, segment, screen, screen, level_2, level_2, power_constants.clone());
+    for screen in PythonFor(1200, 2001, 100) {
+        for level_2 in PythonFor(2200, 3401, 100) {
+            single_simulation(&user_paths, &dump_file, &cluster_json, threshold, segment, screen as usize, screen as usize, level_2 as usize, level_2 as usize, power_constants.clone());
         }
     }
 }
@@ -92,7 +107,7 @@ fn main() {
 //    compare_each_simulation(&object_result, &dump_file, &cluster_json, threshold, segment, width, height, l2_width, l2_height, power_constant);
 //    batch_simulation(&object_result, &dump_file, &cluster_json, threshold, segment, power_constant);
 
-    // for multi-process
+    // for auto.sh
     let mut user_paths: Vec<DirEntry> = fs::read_dir(&object_result).unwrap().map(|r| r.unwrap()).collect();
     user_paths.sort_by_key(|dir| dir.path());
     single_simulation(&user_paths, &dump_file, &cluster_json, threshold, segment, width, height, l2_width, l2_height, power_constant);
