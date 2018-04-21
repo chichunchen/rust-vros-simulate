@@ -10,8 +10,8 @@ serde_json = "1.0"
 
 [lib]
 name = "simulator"
-path = "src/lib.rs"
+path = "src/main.rs"
 
 [[bin]]
 name = "simulator"
-path = "src/lib.rs"
+path = "src/main.rs"
