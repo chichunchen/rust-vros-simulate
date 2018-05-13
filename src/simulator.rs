@@ -350,7 +350,7 @@ impl Simulator {
                 self.ignored_level_two += local_ignored_level_two;
             }
         }
-        assert_eq!(self.hit_list.len(), self.user_fov_list.len());
+//        assert_eq!(self.hit_list.len(), self.user_fov_list.len());
 //        println!("The amount of level two that is ignored {}, total level-three {:?}", self.ignored_level_two, self.get_hit_counts()[2]);
 
         // fill wifi_pc and soc_pc
@@ -443,6 +443,17 @@ impl Simulator {
         let soc_level_two_power_constant = self.level_two_interpolate(small_soc_constant, full_soc_constant);
         let soc_level_three_power_constant = full_soc_constant;
 
+        // Computation for wifi:
+        // Since we got hit rate on each level, the hit rate level of each frame means that they
+        // need to transmit data cumulatively. For instance, frame 1 hit at level 2, therefore, in
+        // our VR system, we need to transmit both frame of level 1 and level 2 size. You might think
+        // that why don't we need to consider about the whole segment for computing power consumption.
+        // That is because we've firstly computing the hit rate in the sense of having segment in
+        // our VR system.
+        //
+        // Computation for optimized wifi:
+        // In this version, we could prevent the system from fetching level-2 cache by using the
+        // metadata from client sensor.
         if self.is_hierarchical() && (!self.opt_flag) {
             self.wifi_pc = {
                 let first_level = cache_hit_ratios[0] * wifi_level_one_power_constant;
@@ -459,12 +470,11 @@ impl Simulator {
         } else if self.is_hierarchical() && self.opt_flag {
             self.wifi_pc = {
                 let first_level = cache_hit_ratios[0] * wifi_level_one_power_constant;
-                let second_level = cache_hit_ratios[1] * (wifi_level_one_power_constant + wifi_level_two_power_constant);
                 let third_level = cache_hit_ratios[2] * (wifi_level_one_power_constant + wifi_level_two_power_constant + wifi_level_three_power_constant);
                 // save is the ratio that we (ignored before fetch / total) * power constant
-                let save = (self.ignored_level_two as f64 / self.hit_list.len() as f64) * wifi_level_two_power_constant;
-//                println!("save {}", save);
-                first_level + second_level + third_level - save
+                // let save = (self.ignored_level_two as f64 / self.hit_list.len() as f64) * wifi_level_two_power_constant;
+                // println!("save {}", save);
+                first_level + third_level
             };
             self.soc_pc = {
                 let first_level = cache_hit_ratios[0] * soc_level_one_power_constant;

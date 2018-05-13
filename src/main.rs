@@ -57,7 +57,7 @@ fn compare_each_simulation(object_result: &String, dump_file: &String, cluster_j
         let mut simulator_opt = Simulator::new(&user_file, &dump_file, &cluster_json, threshold, segment, fov_width, fov_height, level_two_width, level_two_height, power_constants.clone(), power_constant_1224.clone(), true);
         simulator_opt.simulate();
         simulator_opt.power_consumption();
-//        println!("l1-l2-hier: {:?}, l1-only: {:?}, l1-l2-opt-hier: {:?}", simulator.get_hit_ratios(), simulator_base.get_hit_ratios(), simulator_opt.get_hit_ratios());
+        println!("l1-l2-hier: {:?}, l1-only: {:?}, l1-l2-opt-hier: {:?}", simulator.get_hit_ratios(), simulator_base.get_hit_ratios(), simulator_opt.get_hit_ratios());
     }
 }
 
@@ -74,7 +74,7 @@ fn single_simulate_pc(user_paths: &Vec<DirEntry>, dump_file: &String, cluster_js
 //        println!("{} {} {}", simulator_opt.get_wifi_pc(), simulator_opt.get_soc_pc(), count);
     }
     // wifi soc screen level_2
-//    println!("{} {} {} {}", pc_tuple.0 / count as f64, pc_tuple.1 / count as f64, fov_width, level_two_width);
+    println!("{} {} {} {}", pc_tuple.0 / count as f64, pc_tuple.1 / count as f64, fov_width, level_two_width);
 }
 
 fn single_simulate_hit(user_paths: &Vec<DirEntry>, dump_file: &String, cluster_json: &String, threshold: f64, segment: usize, fov_width: usize, fov_height: usize, level_two_width: usize, level_two_height: usize, power_constants: &Vec<PowerConstants>, power_constant_1224: &Vec<PowerConstants>) {
@@ -93,7 +93,7 @@ fn single_simulate_hit(user_paths: &Vec<DirEntry>, dump_file: &String, cluster_j
     hit_ratios.0 /= count as f64;
     hit_ratios.1 /= count as f64;
     hit_ratios.2 /= count as f64;
-//    println!("{} {} {} {} {}", hit_ratios.0, hit_ratios.1, hit_ratios.2, fov_width, level_two_width);
+    println!("{} {} {} {} {}", hit_ratios.0, hit_ratios.1, hit_ratios.2, fov_width, level_two_width);
 }
 
 #[allow(dead_code)]
