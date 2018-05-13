@@ -15,3 +15,25 @@ path = "src/main.rs"
 [[bin]]
 name = "simulator"
 path = "src/main.rs"
+
+[profile.release]
+opt-level = 3
+debug = false
+rpath = false
+lto = false
+debug-assertions = false
+codegen-units = 1
+panic = 'unwind'
+incremental = false
+overflow-checks = false
+
+[profile.test]
+opt-level = 0
+debug = 2
+rpath = false
+lto = false
+debug-assertions = true
+codegen-units = 1
+panic = 'unwind'
+incremental = true
+overflow-checks = true
