@@ -133,11 +133,10 @@ fn main() {
     match mode.as_ref() {
         "power" => {
             single_simulate_pc(&user_paths, &dump_file, &cluster_json, threshold, segment, width, height, l2_width, l2_height, &power_constant);
-        },
+        }
         "hit" => {
             single_simulate_hit(&user_paths, &dump_file, &cluster_json, threshold, segment, width, height, l2_width, l2_height, &power_constant);
-        },
+        }
         _ => assert!(false),
     }
-
 }

@@ -1,5 +1,6 @@
 # vros-simulate
-Simulator build for research of virtual reality optimization.
+Simulator build for research of virtual reality optimization. The power consumption
+constants is from [here](https://github.com/horizon-research/tx2-power-consumption).
 
 
 ## Usage
