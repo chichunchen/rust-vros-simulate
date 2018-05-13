@@ -17,6 +17,12 @@ enum CacheLevel {
 }
 
 #[derive(Debug, Copy, Clone)]
+enum FrameSize {
+    Small,
+    Full,
+}
+
+#[derive(Debug, Copy, Clone)]
 struct Hit {
     index: usize,
     ratio: f64,
@@ -45,7 +51,8 @@ pub struct Simulator {
     level_two_width: usize,
     level_two_height: usize,
     hit_list: Vec<Hit>,
-    power_constant: Vec<PowerConstants>,
+    level_one_power_constant: Vec<PowerConstants>,
+    full_size_power_constant: Vec<PowerConstants>,
     opt_flag: bool,
     ignored_level_two: usize,
     wifi_pc: f64,
@@ -71,7 +78,10 @@ fn read_json_cluster_from_file<P: AsRef<Path>>(path: P) -> Result<Vec<VideoObjec
 }
 
 impl Simulator {
-    pub fn new(user_file: &String, dump_file: &String, cluster_json: &String, threshold: f64, segment: usize, fov_width: usize, fov_height: usize, level_two_width: usize, level_two_height: usize, power_constants: Vec<PowerConstants>, opt_flag: bool) -> Self {
+    pub fn new(user_file: &String, dump_file: &String, cluster_json: &String, threshold: f64,
+               segment: usize, fov_width: usize, fov_height: usize, level_two_width: usize,
+               level_two_height: usize, full_size_power_constant: Vec<PowerConstants>,
+               level_one_power_constant: Vec<PowerConstants>, opt_flag: bool) -> Self {
         let mut sim = Simulator {
             user_file: user_file.to_string(),
             dump_file: dump_file.to_string(),
@@ -85,7 +95,8 @@ impl Simulator {
             level_two_width,
             level_two_height,
             hit_list: vec![],
-            power_constant: power_constants,
+            level_one_power_constant,
+            full_size_power_constant,
             opt_flag,
             ignored_level_two: 0,
             wifi_pc: 0.0,
@@ -193,6 +204,7 @@ impl Simulator {
         } else {
             // predict if level-two is actually miss before get the data from cloud
             if self.opt_flag {
+//                println!("L1 miss {} at {}", index, ratio);
                 let level_two_viewport = Viewport::create_new_with_size(&fov, self.level_two_width, self.level_two_height);
                 if level_two_viewport.get_cover_result(user_fov) < self.threshold {
                     *ignored_level_two += 1;
@@ -201,7 +213,7 @@ impl Simulator {
                     self.compare_from_level_two(&fov, &user_fov, index, path)
                 }
             } else {
-//            println!("L1 miss {} at {}", index, ratio);
+//                println!("L1 miss {} at {}", index, ratio);
                 if self.is_hierarchical() {
                     self.compare_from_level_two(&fov, &user_fov, index, path)
                 } else {
@@ -292,12 +304,13 @@ impl Simulator {
                     }
                 }
                 if k % self.segment == 0 {
+                    // the first frame in the segment
                     current_path = max_ratio_path;
                     hit_cache_pair = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height, &mut local_ignored_level_two);
                 } else {
-//                println!("k: {}, path: {}, ratio: {}", k, max_ratio_path.unwrap(), max_ratio);
+                    // the rest frames except for the first one in the segment
+//                    println!("k: {}, path: {}, ratio: {}", k, max_ratio_path.unwrap(), max_ratio);
 
-                    // non-hierarchical
                     if self.is_hierarchical() {
                         // hierarchical
                         match hit_cache_pair.1 {
@@ -337,7 +350,7 @@ impl Simulator {
                 self.ignored_level_two += local_ignored_level_two;
             }
         }
-//        assert_eq!(self.hit_list.len(), self.user_fov_list.len());
+        assert_eq!(self.hit_list.len(), self.user_fov_list.len());
 //        println!("The amount of level two that is ignored {}, total level-three {:?}", self.ignored_level_two, self.get_hit_counts()[2]);
 
         // fill wifi_pc and soc_pc
@@ -376,6 +389,34 @@ impl Simulator {
         acc_hit_ratio
     }
 
+    fn get_wifi_power_constant(&self, video_name: &str, size: FrameSize) -> f64 {
+        let mut wifi_name: String = video_name.to_owned().to_string();
+        wifi_name.push_str("_WIFI");
+        match size {
+            FrameSize::Small => self.level_one_power_constant.iter().find(|&x| x.name == wifi_name).unwrap().value,
+            FrameSize::Full => self.full_size_power_constant.iter().find(|&x| x.name == wifi_name).unwrap().value
+        }
+    }
+
+    fn get_soc_power_constant(&self, video_name: &str, size: FrameSize) -> f64 {
+        let mut soc_name: String = video_name.to_owned().to_string();
+        soc_name.push_str("_SOC");
+        match size {
+            FrameSize::Small => self.level_one_power_constant.iter().find(|&x| x.name == soc_name).unwrap().value,
+            FrameSize::Full => self.full_size_power_constant.iter().find(|&x| x.name == soc_name).unwrap().value
+        }
+    }
+
+    // small is for level one power constant, big is for full size power constant
+    fn level_two_interpolate(&self, small: f64, big: f64) -> f64 {
+        let l1_resolution = self.fov_width * self.fov_height;
+        let l2_resolution = self.level_two_width * self.level_two_height;
+        let full_resolution = 3840 * 2160;
+        let x = l2_resolution - l1_resolution;
+        let y = full_resolution - l2_resolution;
+        ((x as f64 * small) / (x + y) as f64) + ((y as f64 * big) / (x + y) as f64)
+    }
+
     pub fn power_consumption(&mut self) {
         // extract name from user_file
         // which for example could be: user_viewport_result/Elephant-training-2bpICIClAIg/uid-a413ecca-3822-47b3-92f3-2e2fbe8470c0.txt
@@ -383,42 +424,40 @@ impl Simulator {
             let temp_name: &str = self.user_file.split("/").collect::<Vec<_>>()[1];
             temp_name.split("-").collect::<Vec<_>>()[0]
         };
-        let mut wifi_name: String = video_name.to_owned().to_string();
-        let mut soc_name: String = video_name.to_owned().to_string();
-        wifi_name.push_str("_WIFI");
-        soc_name.push_str("_SOC");
 
         // get power constant value
-        let wifi_value = self.power_constant.iter().find(|&x| x.name == wifi_name).unwrap().value;
-        let soc_value = self.power_constant.iter().find(|&x| x.name == soc_name).unwrap().value;
-//            println!("{} {} {} {}", wifi_name, wifi_value, soc_name, soc_value);
+        let small_wifi_constant = self.get_wifi_power_constant(&video_name, FrameSize::Small);
+        let full_wifi_constant = self.get_wifi_power_constant(&video_name, FrameSize::Full);
+        let small_soc_constant = self.get_soc_power_constant(&video_name, FrameSize::Small);
+        let full_soc_constant = self.get_soc_power_constant(&video_name, FrameSize::Full);
+//        println!("PPPPP {} {} {} {} {} {}",
+//                 small_wifi_constant, self.level_two_interpolate(small_wifi_constant, full_wifi_constant), full_wifi_constant,
+//                 small_soc_constant, self.level_two_interpolate(small_soc_constant, full_soc_constant), full_soc_constant);
 
-        // compute power constant for each level
+        // Power constant for each level
         let cache_hit_ratios = self.get_hit_ratios();
-        let wifi_level_one_power_constant = wifi_value * self.fov_width as f64 * self.fov_height as f64 / 3840 as f64 / 2160 as f64;
-        let wifi_level_two_power_constant = wifi_value * self.level_two_width as f64 * self.level_two_height as f64 / 3840 as f64 / 2160 as f64;
-        let wifi_level_three_power_constant = wifi_value;
-        let soc_level_one_power_constant = soc_value * self.fov_width as f64 * self.fov_height as f64 / 3840 as f64 / 2160 as f64;
-        let soc_level_two_power_constant = soc_value * self.level_two_width as f64 * self.level_two_height as f64 / 3840 as f64 / 2160 as f64;
-        let soc_level_three_power_constant = soc_value;
+        let wifi_level_one_power_constant = small_wifi_constant;
+        let wifi_level_two_power_constant = self.level_two_interpolate(small_wifi_constant, full_wifi_constant);
+        let wifi_level_three_power_constant = full_wifi_constant;
+        let soc_level_one_power_constant = small_soc_constant;
+        let soc_level_two_power_constant = self.level_two_interpolate(small_soc_constant, full_soc_constant);
+        let soc_level_three_power_constant = full_soc_constant;
 
-        let p_wifi;
-        let p_soc;
         if self.is_hierarchical() && (!self.opt_flag) {
-            p_wifi = {
+            self.wifi_pc = {
                 let first_level = cache_hit_ratios[0] * wifi_level_one_power_constant;
                 let second_level = cache_hit_ratios[1] * (wifi_level_one_power_constant + wifi_level_two_power_constant);
                 let third_level = cache_hit_ratios[2] * (wifi_level_one_power_constant + wifi_level_two_power_constant + wifi_level_three_power_constant);
                 first_level + second_level + third_level
             };
-            p_soc = {
+            self.soc_pc = {
                 let first_level = cache_hit_ratios[0] * soc_level_one_power_constant;
                 let second_level = cache_hit_ratios[1] * soc_level_two_power_constant;
                 let third_level = cache_hit_ratios[2] * soc_level_three_power_constant;
                 first_level + second_level + third_level
             };
         } else if self.is_hierarchical() && self.opt_flag {
-            p_wifi = {
+            self.wifi_pc = {
                 let first_level = cache_hit_ratios[0] * wifi_level_one_power_constant;
                 let second_level = cache_hit_ratios[1] * (wifi_level_one_power_constant + wifi_level_two_power_constant);
                 let third_level = cache_hit_ratios[2] * (wifi_level_one_power_constant + wifi_level_two_power_constant + wifi_level_three_power_constant);
@@ -427,20 +466,20 @@ impl Simulator {
 //                println!("save {}", save);
                 first_level + second_level + third_level - save
             };
-            p_soc = {
+            self.soc_pc = {
                 let first_level = cache_hit_ratios[0] * soc_level_one_power_constant;
                 let second_level = cache_hit_ratios[1] * soc_level_two_power_constant;
                 let third_level = cache_hit_ratios[2] * soc_level_three_power_constant;
                 first_level + second_level + third_level
             };
         } else {
-            p_wifi = {
+            self.wifi_pc = {
                 let first_level = cache_hit_ratios[0] * wifi_level_one_power_constant;
                 let third_level = cache_hit_ratios[2] * (wifi_level_one_power_constant + wifi_level_three_power_constant);
                 assert_eq!(cache_hit_ratios[1], 0.0);
                 first_level + third_level
             };
-            p_soc = {
+            self.soc_pc = {
                 let first_level = cache_hit_ratios[0] * soc_level_one_power_constant;
                 let third_level = cache_hit_ratios[2] * soc_level_three_power_constant;
                 assert_eq!(cache_hit_ratios[1], 0.0);
@@ -448,8 +487,7 @@ impl Simulator {
             };
         }
 
-        self.wifi_pc = p_wifi;
-        self.soc_pc = p_soc;
+//        self.print_power_consumption();
     }
 
     pub fn print_power_consumption(&self) {
