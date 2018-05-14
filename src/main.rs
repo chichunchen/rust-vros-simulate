@@ -6,6 +6,7 @@ extern crate serde_json;
 
 mod simulator;
 mod ds;
+mod constants;
 
 pub use simulator::{Simulator, PowerConstants};
 pub use ds::{Viewport, Frame};
@@ -41,27 +42,43 @@ fn read_power_consumption_from_file<P: AsRef<Path>>(path: P) -> Result<Vec<Power
 }
 
 #[allow(dead_code)]
-fn compare_each_simulation(object_result: &String, dump_file: &String, cluster_json: &String, threshold: f64, segment: usize, fov_width: usize, fov_height: usize, level_two_width: usize, level_two_height: usize, power_constants: &Vec<PowerConstants>, power_constant_1224: &Vec<PowerConstants>) {
+fn compare_each_simulation(object_result: &String, dump_file: &String, cluster_json: &String,
+                           threshold: f64, segment: usize, fov_width: usize, fov_height: usize,
+                           level_two_width: usize, level_two_height: usize,
+                           power_constants: &Vec<PowerConstants>, power_constant_1224: &Vec<PowerConstants>) {
     let mut user_paths: Vec<DirEntry> = fs::read_dir(&object_result).unwrap().map(|r| r.unwrap()).collect();
     user_paths.sort_by_key(|dir| dir.path());
 
     for path in user_paths {
         let user_file = path.path().to_str().unwrap().to_string();
 //        println!("{}", user_file);
-        let mut simulator = Simulator::new(&user_file, &dump_file, &cluster_json, threshold, segment, fov_width, fov_height, level_two_width, level_two_height, power_constants.clone(), power_constant_1224.clone(), false);
+        let mut simulator = Simulator::new(&user_file, &dump_file, &cluster_json, threshold,
+                                           segment, fov_width, fov_height, level_two_width, level_two_height,
+                                           power_constants.clone(),
+                                           power_constant_1224.clone(), false);
         simulator.simulate();
         simulator.power_consumption();
-        let mut simulator_base = Simulator::new(&user_file, &dump_file, &cluster_json, threshold, segment, fov_width, fov_height, fov_width, fov_height, power_constants.clone(), power_constant_1224.clone(), false);
+        let mut simulator_base = Simulator::new(&user_file, &dump_file, &cluster_json,
+                                                threshold, segment, fov_width, fov_height, fov_width,
+                                                fov_height, power_constants.clone(),
+                                                power_constant_1224.clone(), false);
         simulator_base.simulate();
         simulator_base.power_consumption();
-        let mut simulator_opt = Simulator::new(&user_file, &dump_file, &cluster_json, threshold, segment, fov_width, fov_height, level_two_width, level_two_height, power_constants.clone(), power_constant_1224.clone(), true);
+        let mut simulator_opt = Simulator::new(&user_file, &dump_file, &cluster_json,
+                                               threshold, segment, fov_width, fov_height,
+                                               level_two_width, level_two_height, power_constants.clone(),
+                                               power_constant_1224.clone(), true);
         simulator_opt.simulate();
         simulator_opt.power_consumption();
-        println!("l1-l2-hier: {:?}, l1-only: {:?}, l1-l2-opt-hier: {:?}", simulator.get_hit_ratios(), simulator_base.get_hit_ratios(), simulator_opt.get_hit_ratios());
+        println!("l1-l2-hier: {:?}, l1-only: {:?}, l1-l2-opt-hier: {:?}", simulator.get_hit_ratios(),
+                 simulator_base.get_hit_ratios(), simulator_opt.get_hit_ratios());
     }
 }
 
-fn single_simulate_pc(user_paths: &Vec<DirEntry>, dump_file: &String, cluster_json: &String, threshold: f64, segment: usize, fov_width: usize, fov_height: usize, level_two_width: usize, level_two_height: usize, power_constants_4k: &Vec<PowerConstants>, power_constant_1224: &Vec<PowerConstants>) {
+fn single_simulate_pc(user_paths: &Vec<DirEntry>, dump_file: &String, cluster_json: &String,
+                      threshold: f64, segment: usize, fov_width: usize, fov_height: usize,
+                      level_two_width: usize, level_two_height: usize,
+                      power_constants_4k: &Vec<PowerConstants>, power_constant_1224: &Vec<PowerConstants>) {
     let mut pc_tuple: (f64, f64) = (0.0, 0.0);
     let mut count = 0;
     for path in user_paths {
@@ -77,7 +94,10 @@ fn single_simulate_pc(user_paths: &Vec<DirEntry>, dump_file: &String, cluster_js
     println!("{} {} {} {}", pc_tuple.0 / count as f64, pc_tuple.1 / count as f64, fov_width, level_two_width);
 }
 
-fn single_simulate_hit(user_paths: &Vec<DirEntry>, dump_file: &String, cluster_json: &String, threshold: f64, segment: usize, fov_width: usize, fov_height: usize, level_two_width: usize, level_two_height: usize, power_constants: &Vec<PowerConstants>, power_constant_1224: &Vec<PowerConstants>) {
+fn single_simulate_hit(user_paths: &Vec<DirEntry>, dump_file: &String, cluster_json: &String,
+                       threshold: f64, segment: usize, fov_width: usize, fov_height: usize,
+                       level_two_width: usize, level_two_height: usize,
+                       power_constants: &Vec<PowerConstants>, power_constant_1224: &Vec<PowerConstants>) {
     let mut hit_ratios: (f64, f64, f64) = (0.0, 0.0, 0.0);
     let mut count = 0;
     for path in user_paths {
@@ -97,13 +117,18 @@ fn single_simulate_hit(user_paths: &Vec<DirEntry>, dump_file: &String, cluster_j
 }
 
 #[allow(dead_code)]
-fn batch_simulation(object_result: &String, dump_file: &String, cluster_json: &String, threshold: f64, segment: usize, power_constants: &Vec<PowerConstants>, power_constant_1224: &Vec<PowerConstants>) {
+fn batch_simulation(object_result: &String, dump_file: &String, cluster_json: &String,
+                    threshold: f64, segment: usize, power_constants: &Vec<PowerConstants>,
+                    power_constant_1224: &Vec<PowerConstants>) {
     let mut user_paths: Vec<DirEntry> = fs::read_dir(&object_result).unwrap().map(|r| r.unwrap()).collect();
     user_paths.sort_by_key(|dir| dir.path());
 
     for screen in PythonFor(1200, 2001, 100) {
         for level_2 in PythonFor(2200, 3401, 100) {
-            single_simulate_pc(&user_paths, &dump_file, &cluster_json, threshold, segment, screen as usize, screen as usize, level_2 as usize, level_2 as usize, power_constants, power_constant_1224);
+            single_simulate_pc(&user_paths, &dump_file, &cluster_json, threshold, segment,
+                               screen as usize, screen as usize,
+                               level_2 as usize, level_2 as usize,
+                               power_constants, power_constant_1224);
         }
     }
 }
@@ -133,10 +158,14 @@ fn main() {
     user_paths.sort_by_key(|dir| dir.path());
     match mode.as_ref() {
         "power" => {
-            single_simulate_pc(&user_paths, &dump_file, &cluster_json, threshold, segment, width, height, l2_width, l2_height, &power_constant_4k, &power_constant_1224);
+            single_simulate_pc(&user_paths, &dump_file, &cluster_json, threshold, segment,
+                               width, height, l2_width,
+                               l2_height, &power_constant_4k, &power_constant_1224);
         }
         "hit" => {
-            single_simulate_hit(&user_paths, &dump_file, &cluster_json, threshold, segment, width, height, l2_width, l2_height, &power_constant_4k, &power_constant_1224);
+            single_simulate_hit(&user_paths, &dump_file, &cluster_json, threshold, segment,
+                                width, height, l2_width,
+                                l2_height, &power_constant_4k, &power_constant_1224);
         }
         _ => assert!(false),
     }

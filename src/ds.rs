@@ -1,3 +1,5 @@
+use constants;
+
 #[derive(Debug, Copy, Clone)]
 pub struct Viewport {
     conf: i32,
@@ -22,7 +24,7 @@ impl Viewport {
         let mut x = other_viewport.x + ((other_viewport.width as i32 - width as i32) / 2);
         let y = other_viewport.y + ((other_viewport.height as i32 - height as i32) / 2);
         if x < 0 {
-            x = 3840 + x;
+            x = constants::FULL_SIZE_WIDTH_I32 + x;
         }
         Viewport {
             conf: other_viewport.conf,
@@ -38,37 +40,37 @@ impl Viewport {
         let self_rightmost = self.x + self.width as i32;
         let user_rightmost = user_fov.x + user_fov.width as i32;
         match self_rightmost {
-            n if n > 3840 => {
+            n if n > constants::FULL_SIZE_WIDTH_I32 => {
                 match user_rightmost {
-                    m if m > 3840 => {
+                    m if m > constants::FULL_SIZE_WIDTH_I32 => {
                         let left_1 = 0;
-                        let right_1 = i32::min(self_rightmost - 3840, user_rightmost - 3840);
+                        let right_1 = i32::min(self_rightmost - constants::FULL_SIZE_WIDTH_I32, user_rightmost - constants::FULL_SIZE_WIDTH_I32);
                         total_x += right_1 - left_1;
                         let left_2 = i32::max(self.x, user_fov.x);
-                        let right_2 = 3840;
+                        let right_2 = constants::FULL_SIZE_WIDTH_I32;
                         total_x += right_2 - left_2;
                     },
-                    m if m <= 3840 && m >= 0 => {
-                        if self.x + self.width as i32 - 3840 > user_fov.x {
+                    m if m <= constants::FULL_SIZE_WIDTH_I32 && m >= 0 => {
+                        if self.x + self.width as i32 - constants::FULL_SIZE_WIDTH_I32 > user_fov.x {
                             let left = user_fov.x;
-                            let right = i32::min(self_rightmost - 3840, user_rightmost);
+                            let right = i32::min(self_rightmost - constants::FULL_SIZE_WIDTH_I32, user_rightmost);
                             total_x += right - left;
                         }
                         if (user_fov.x + user_fov.width as i32) > self.x {
                             let left = i32::max(self.x, user_fov.x);
-                            let right = i32::min(3840, user_rightmost);
+                            let right = i32::min(constants::FULL_SIZE_WIDTH_I32, user_rightmost);
                             total_x += right - left;
                         }
                     },
                     _ => assert!(false),
                 }
             },
-            n if n <= 3840 && n >= 0 => {
+            n if n <= constants::FULL_SIZE_WIDTH_I32 && n >= 0 => {
                 match user_rightmost {
-                    m if m > 3840 => {
-                        if self.x < (user_rightmost - 3840) {
+                    m if m > constants::FULL_SIZE_WIDTH_I32 => {
+                        if self.x < (user_rightmost - constants::FULL_SIZE_WIDTH_I32) {
                             let left_1 = i32::max(self.x, 0);
-                            let right_1 = i32::min(self_rightmost, user_rightmost - 3840);
+                            let right_1 = i32::min(self_rightmost, user_rightmost - constants::FULL_SIZE_WIDTH_I32);
                             total_x += right_1 - left_1;
                         }
                         if self.x + self.width as i32 > user_fov.x {
@@ -77,7 +79,7 @@ impl Viewport {
                             total_x += right_2 - left_2;
                         }
                     },
-                    m if m <= 3840 && m >= 0 => {
+                    m if m <= constants::FULL_SIZE_WIDTH_I32 && m >= 0 => {
                         let left = i32::max(self.x, user_fov.x);
                         let right = i32::min(self_rightmost, user_rightmost);
                         if right - left > 0 {

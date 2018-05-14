@@ -2,6 +2,14 @@
 Simulator build for research of virtual reality optimization. The power consumption
 constants is from [here](https://github.com/horizon-research/tx2-power-consumption).
 
+## TODO
+- Client-side Optimizations
+    - Make use of **threshold**
+        - lower threshold means client side need to draw something by guessing
+        - to make threshold lower (~= 0.8), we need to draw more precisely, therefore:
+        - [ ] (static) find frame (closest in time) that covers the missing part
+        - [ ] (dynamic) use motion vector to draw the missing part
+
 ## Usage
 First of all, you need a recent version of rust compiler (maybe >= 1.25). For using
 the simulator, you could try the instruction below or look into `auto_hit.sh` or
@@ -12,10 +20,11 @@ cargo run user_viewport_result/Paris-sJxiPiAaB4k tracedump/paris.txt object_as_c
 ```
 
 ## Implementation Details
+- TODO: should fill this part as detail as possible!
 - Counting power consumption by using the hit rate calculated in the simulate
  function in `src/simulator.rs`
 
-## Result
+## Results
 The data is visualized in the [vros-dataset](https://github.com/horizon-research/vros-dataset).
 And you might be interested in the [summary](https://github.com/horizon-research/vros-dataset/blob/master/heatmap.ipynb) of the data.
 

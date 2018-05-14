@@ -1,4 +1,6 @@
 use ds::{Frame, Viewport};
+use constants;
+
 use std::io::prelude::*;
 use std::io::BufReader;
 use std::fs::File;
@@ -81,6 +83,10 @@ impl Simulator {
                segment: usize, fov_width: usize, fov_height: usize, level_two_width: usize,
                level_two_height: usize, full_size_power_constant: Vec<PowerConstants>,
                level_one_power_constant: Vec<PowerConstants>, opt_flag: bool) -> Self {
+        let mut level_two_height = level_two_height;
+        if level_two_height > constants::FULL_SIZE_HEIGHT_USIZE {
+            level_two_height = constants::FULL_SIZE_HEIGHT_USIZE;
+        }
         let mut sim = Simulator {
             user_file: user_file.to_string(),
             dump_file: dump_file.to_string(),
@@ -246,8 +252,8 @@ impl Simulator {
             ratio: 1.0,
             cache_level: CacheLevel::LevelThree,
             path,
-            width: 3840,
-            height: 2160,
+            width: constants::FULL_SIZE_WIDTH_USIZE,
+            height: constants::FULL_SIZE_HEIGHT_USIZE,
         };
         (hit, CacheLevel::LevelThree)
     }
@@ -393,7 +399,7 @@ impl Simulator {
     fn level_two_interpolate(&self, small: f64, big: f64) -> f64 {
         let l1_resolution = self.fov_width * self.fov_height;
         let l2_resolution = self.level_two_width * self.level_two_height;
-        let full_resolution = 3840 * 2160;
+        let full_resolution = constants::FULL_SIZE_WIDTH_USIZE * constants::FULL_SIZE_HEIGHT_USIZE;
         let x = l2_resolution - l1_resolution;
         let y = full_resolution - l2_resolution;
         ((x as f64 * small) / (x + y) as f64) + ((y as f64 * big) / (x + y) as f64)
@@ -486,7 +492,7 @@ impl Simulator {
             };
         }
 
-//        println!("{:?}", self.get_hit_ratios());
+        println!("{:?}", self.get_hit_ratios());
     }
 
     pub fn print_power_consumption(&self) {
