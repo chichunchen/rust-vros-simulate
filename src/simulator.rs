@@ -54,7 +54,6 @@ pub struct Simulator {
     level_one_power_constant: Vec<PowerConstants>,
     full_size_power_constant: Vec<PowerConstants>,
     opt_flag: bool,
-    ignored_level_two: usize,
     wifi_pc: f64,
     soc_pc: f64,
 }
@@ -98,7 +97,6 @@ impl Simulator {
             level_one_power_constant,
             full_size_power_constant,
             opt_flag,
-            ignored_level_two: 0,
             wifi_pc: 0.0,
             soc_pc: 0.0,
         };
@@ -187,7 +185,7 @@ impl Simulator {
 //        println!("{:?}", self.user_fov_list);
     }
 
-    fn compare_from_level_one(&self, fov: &Viewport, user_fov: &Viewport, index: usize, path: usize, width: usize, height: usize, ignored_level_two: &mut usize) -> (Hit, CacheLevel) {
+    fn compare_from_level_one(&self, fov: &Viewport, user_fov: &Viewport, index: usize, path: usize, width: usize, height: usize) -> (Hit, CacheLevel) {
         let ratio = fov.get_cover_result(user_fov);
         let hit: Hit;
         if ratio >= self.threshold {
@@ -265,7 +263,6 @@ impl Simulator {
     // simulate with hierarchical or non-hierarchical with segment and threshold implicitly
     pub fn simulate(&mut self) {
         let mut current_path: Option<usize> = None;
-        let mut local_ignored_level_two;
         let mut hit_cache_pair: (Hit, CacheLevel) = (Hit {
             index: 0,
             ratio: 0.0,
@@ -280,7 +277,6 @@ impl Simulator {
             let mut temp_viewport: Option<&Viewport> = None;
             let width = self.fov_width;
             let height = self.fov_height;
-            local_ignored_level_two = 0;
 
             if self.path_list.len() > k {
                 for (path, path_viewport) in self.path_list[k].iter().enumerate() {
@@ -294,7 +290,7 @@ impl Simulator {
                 if k % self.segment == 0 {
                     // the first frame in the segment
                     current_path = max_ratio_path;
-                    hit_cache_pair = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height, &mut local_ignored_level_two);
+                    hit_cache_pair = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height);
                 } else {
                     // the rest frames except for the first one in the segment
 //                    println!("k: {}, path: {}, ratio: {}", k, max_ratio_path.unwrap(), max_ratio);
@@ -304,7 +300,7 @@ impl Simulator {
                         match hit_cache_pair.1 {
                             CacheLevel::LevelOne => {
                                 if current_path == max_ratio_path {
-                                    hit_cache_pair = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height, &mut local_ignored_level_two);
+                                    hit_cache_pair = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height);
                                 } else {
                                     hit_cache_pair = self.compare_from_level_three(k, max_ratio_path.unwrap());
                                 }
@@ -324,7 +320,7 @@ impl Simulator {
                         match hit_cache_pair.1 {
                             CacheLevel::LevelOne => {
                                 if current_path == max_ratio_path {
-                                    hit_cache_pair = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height, &mut local_ignored_level_two);
+                                    hit_cache_pair = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height);
                                 } else {
                                     hit_cache_pair = self.compare_from_level_three(k, max_ratio_path.unwrap());
                                 }
@@ -335,11 +331,9 @@ impl Simulator {
                     }
                 }
                 self.hit_list.push(hit_cache_pair.0.clone());
-                self.ignored_level_two += local_ignored_level_two;
             }
         }
 //        assert_eq!(self.hit_list.len(), self.user_fov_list.len());
-//        println!("The amount of level two that is ignored {}, total level-three {:?}", self.ignored_level_two, self.get_hit_counts()[2]);
 
         // fill wifi_pc and soc_pc
         self.power_consumption();
@@ -441,7 +435,16 @@ impl Simulator {
         //
         // Computation for optimized wifi:
         // In this version, we could prevent the system from fetching level-2 cache by using the
-        // metadata from client sensor.
+        // metadata from client sensor. Since the computation of hit rate considered segment by
+        // nature, we can simply ignore level two power constant when computing the power of frame
+        // that missed at level two.
+        // For example:
+        // Assume we got the hit ratio [0.5, 0.3, 0.2], which array[0] is for level-1, array[1] is
+        // for level-2, and so on. Since in this optimization, we know that when missed at level-1,
+        // we could determine whether level-2 hit or not by using the sensor data (where did user
+        // look at). The computation of level-1 and level-2 in this optimization is the same in this
+        // VR system, however, when computing the power consumption that level-2 has missed, we could
+        // simply add up the power constants of level-1 + level-3.
         if self.is_hierarchical() && (!self.opt_flag) {
             self.wifi_pc = {
                 let first_level = cache_hit_ratios[0] * wifi_level_one_power_constant;
