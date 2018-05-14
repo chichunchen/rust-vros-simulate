@@ -71,7 +71,7 @@ fn single_simulate_pc(user_paths: &Vec<DirEntry>, dump_file: &String, cluster_js
         pc_tuple.0 += simulator_opt.get_wifi_pc();
         pc_tuple.1 += simulator_opt.get_soc_pc();
         count += 1;
-//        println!("{} {} {}", simulator_opt.get_wifi_pc(), simulator_opt.get_soc_pc(), count);
+//        simulator_opt.print_power_consumption();
     }
     // wifi soc screen level_2
     println!("{} {} {} {}", pc_tuple.0 / count as f64, pc_tuple.1 / count as f64, fov_width, level_two_width);

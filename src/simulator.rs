@@ -202,23 +202,11 @@ impl Simulator {
             };
             (hit, CacheLevel::LevelOne)
         } else {
-            // predict if level-two is actually miss before get the data from cloud
-            if self.opt_flag {
-//                println!("L1 miss {} at {}", index, ratio);
-                let level_two_viewport = Viewport::create_new_with_size(&fov, self.level_two_width, self.level_two_height);
-                if level_two_viewport.get_cover_result(user_fov) < self.threshold {
-                    *ignored_level_two += 1;
-                    self.compare_from_level_three(index, path)
-                } else {
-                    self.compare_from_level_two(&fov, &user_fov, index, path)
-                }
+            // predict if level-two is actually miss before downloading segment from cloud server
+            if self.is_hierarchical() {
+                self.compare_from_level_two(&fov, &user_fov, index, path)
             } else {
-//                println!("L1 miss {} at {}", index, ratio);
-                if self.is_hierarchical() {
-                    self.compare_from_level_two(&fov, &user_fov, index, path)
-                } else {
-                    self.compare_from_level_three(index, path)
-                }
+                self.compare_from_level_three(index, path)
             }
         }
     }
@@ -470,11 +458,9 @@ impl Simulator {
         } else if self.is_hierarchical() && self.opt_flag {
             self.wifi_pc = {
                 let first_level = cache_hit_ratios[0] * wifi_level_one_power_constant;
-                let third_level = cache_hit_ratios[2] * (wifi_level_one_power_constant + wifi_level_two_power_constant + wifi_level_three_power_constant);
-                // save is the ratio that we (ignored before fetch / total) * power constant
-                // let save = (self.ignored_level_two as f64 / self.hit_list.len() as f64) * wifi_level_two_power_constant;
-                // println!("save {}", save);
-                first_level + third_level
+                let second_level = cache_hit_ratios[1] * (wifi_level_one_power_constant + wifi_level_two_power_constant);
+                let third_level = cache_hit_ratios[2] * (wifi_level_one_power_constant + wifi_level_three_power_constant);
+                first_level + second_level + third_level
             };
             self.soc_pc = {
                 let first_level = cache_hit_ratios[0] * soc_level_one_power_constant;
@@ -497,7 +483,7 @@ impl Simulator {
             };
         }
 
-//        self.print_power_consumption();
+//        println!("{:?}", self.get_hit_ratios());
     }
 
     pub fn print_power_consumption(&self) {
