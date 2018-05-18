@@ -4,6 +4,7 @@ constants is from [here](https://github.com/horizon-research/tx2-power-consumpti
 
 ## TODO
 - Client-side Optimizations
+    - [ ] More precise power constant computation
     - Make use of **threshold**
         - lower threshold means client side need to draw something by guessing
         - to make threshold lower (~= 0.8), we need to draw more precisely, therefore:

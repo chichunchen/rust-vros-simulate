@@ -402,7 +402,7 @@ impl Simulator {
         let full_resolution = constants::FULL_SIZE_WIDTH_USIZE * constants::FULL_SIZE_HEIGHT_USIZE;
         let x = l2_resolution - l1_resolution;
         let y = full_resolution - l2_resolution;
-        ((x as f64 * small) / (x + y) as f64) + ((y as f64 * big) / (x + y) as f64)
+        ((y as f64 * small) / (x + y) as f64) + ((x as f64 * big) / (x + y) as f64)
     }
 
     pub fn power_consumption(&mut self) {
@@ -469,12 +469,14 @@ impl Simulator {
                 let first_level = cache_hit_ratios[0] * wifi_level_one_power_constant;
                 let second_level = cache_hit_ratios[1] * (wifi_level_one_power_constant + wifi_level_two_power_constant);
                 let third_level = cache_hit_ratios[2] * (wifi_level_one_power_constant + wifi_level_three_power_constant);
+//                println!("LL {} {} {}", first_level, second_level, third_level);
                 first_level + second_level + third_level
             };
             self.soc_pc = {
                 let first_level = cache_hit_ratios[0] * soc_level_one_power_constant;
                 let second_level = cache_hit_ratios[1] * soc_level_two_power_constant;
                 let third_level = cache_hit_ratios[2] * soc_level_three_power_constant;
+//                println!("LL {} {} {}", first_level, second_level, third_level);
                 first_level + second_level + third_level
             };
         } else {
