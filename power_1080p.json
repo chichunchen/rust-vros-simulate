@@ -1,12 +1,13 @@
 [
   {
     "name": "Elephant_WIFI",
-    "value": 124.38192337517566
+    "value": 108.17957769423555
   },
   {
     "name": "Elephant_SOC",
-    "value": 123.27536187949954
-  },
+    "value": 2002.856742013078
+  }
+,
   {
     "name": "Timelapse_WIFI",
     "value": 175.545734820517
@@ -25,18 +26,18 @@
   },
   {
     "name": "Rhino_WIFI",
-    "value": 133.60918458913898
+    "value": 48.289825593395165
   },
   {
     "name": "Rhino_SOC",
-    "value": 149.19671136203203
+    "value": 1538.7666179910561
   },
   {
     "name": "Rollercoaster_WIFI",
-    "value": 157.95457532058555
+    "value": 75.185109122807
   },
   {
     "name": "Rollercoaster_SOC",
-    "value": 180.34831482243237
+    "value": 1813.3973485281895
   }
 ]

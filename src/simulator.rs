@@ -19,12 +19,6 @@ enum CacheLevel {
 }
 
 #[derive(Debug, Copy, Clone)]
-enum FrameSize {
-    Small,
-    Full,
-}
-
-#[derive(Debug, Copy, Clone)]
 struct Hit {
     index: usize,
     ratio: f64,
@@ -53,8 +47,8 @@ pub struct Simulator {
     level_two_width: usize,
     level_two_height: usize,
     hit_list: Vec<Hit>,
-    level_one_power_constant: Vec<PowerConstants>,
-    full_size_power_constant: Vec<PowerConstants>,
+    power_constant_360: Vec<PowerConstants>,
+    power_constant_not_360: Vec<PowerConstants>,
     opt_flag: bool,
     wifi_pc: f64,
     soc_pc: f64,
@@ -81,8 +75,8 @@ fn read_json_cluster_from_file<P: AsRef<Path>>(path: P) -> Result<Vec<VideoObjec
 impl Simulator {
     pub fn new(user_file: &String, dump_file: &String, cluster_json: &String, threshold: f64,
                segment: usize, fov_width: usize, fov_height: usize, level_two_width: usize,
-               level_two_height: usize, full_size_power_constant: Vec<PowerConstants>,
-               level_one_power_constant: Vec<PowerConstants>, opt_flag: bool) -> Self {
+               level_two_height: usize, power_constant_1080p_360: Vec<PowerConstants>,
+               power_constant_1080p: Vec<PowerConstants>, opt_flag: bool) -> Self {
         let mut level_two_height = level_two_height;
         if level_two_height > constants::FULL_SIZE_HEIGHT_USIZE {
             level_two_height = constants::FULL_SIZE_HEIGHT_USIZE;
@@ -100,8 +94,8 @@ impl Simulator {
             level_two_width,
             level_two_height,
             hit_list: vec![],
-            level_one_power_constant,
-            full_size_power_constant,
+            power_constant_360: power_constant_1080p_360,
+            power_constant_not_360: power_constant_1080p,
             opt_flag,
             wifi_pc: 0.0,
             soc_pc: 0.0,
@@ -377,32 +371,43 @@ impl Simulator {
         acc_hit_ratio
     }
 
-    fn get_wifi_power_constant(&self, video_name: &str, size: FrameSize) -> f64 {
+    fn get_wifi_power_constant(&self, video_name: &str, size: CacheLevel) -> f64 {
         let mut wifi_name: String = video_name.to_owned().to_string();
         wifi_name.push_str("_WIFI");
+        let wifi_power = self.power_constant_360.iter().find(|&x| x.name == wifi_name).unwrap().value;
         match size {
-            FrameSize::Small => self.level_one_power_constant.iter().find(|&x| x.name == wifi_name).unwrap().value,
-            FrameSize::Full => self.full_size_power_constant.iter().find(|&x| x.name == wifi_name).unwrap().value
+            CacheLevel::LevelOne => {
+                wifi_power * (self.fov_width * self.fov_height / 1280 / 720) as f64
+            }
+            CacheLevel::LevelTwo => {
+                wifi_power * (self.level_two_width * self.level_two_height / 1280 / 720) as f64
+            }
+            CacheLevel::LevelThree => {
+                wifi_power * (constants::FULL_SIZE_WIDTH_USIZE * constants::FULL_SIZE_HEIGHT_USIZE * self.level_two_height / 1280 / 720) as f64
+            }
         }
     }
 
-    fn get_soc_power_constant(&self, video_name: &str, size: FrameSize) -> f64 {
+    fn get_soc_power_constant(&self, video_name: &str, size: CacheLevel) -> f64 {
         let mut soc_name: String = video_name.to_owned().to_string();
         soc_name.push_str("_SOC");
-        match size {
-            FrameSize::Small => self.level_one_power_constant.iter().find(|&x| x.name == soc_name).unwrap().value,
-            FrameSize::Full => self.full_size_power_constant.iter().find(|&x| x.name == soc_name).unwrap().value
-        }
-    }
 
-    // small is for level one power constant, big is for full size power constant
-    fn level_two_interpolate(&self, small: f64, big: f64) -> f64 {
-        let l1_resolution = self.fov_width * self.fov_height;
-        let l2_resolution = self.level_two_width * self.level_two_height;
-        let full_resolution = constants::FULL_SIZE_WIDTH_USIZE * constants::FULL_SIZE_HEIGHT_USIZE;
-        let x = l2_resolution - l1_resolution;
-        let y = full_resolution - l2_resolution;
-        ((y as f64 * small) / (x + y) as f64) + ((x as f64 * big) / (x + y) as f64)
+        // both total and render is for 1280x720
+        let total = self.power_constant_360.iter().find(|&x| x.name == soc_name).unwrap().value;
+        let render = self.power_constant_not_360.iter().find(|&x| x.name == soc_name).unwrap().value;
+//        let reproject = total - render;
+
+        match size {
+            CacheLevel::LevelOne => {
+                render * (self.fov_width * self.fov_height / 1280 / 720) as f64
+            }
+            CacheLevel::LevelTwo => {
+                (total * (self.level_two_width * self.level_two_height / 1280 / 720) as f64)
+            }
+            CacheLevel::LevelThree => {
+                (total * (constants::FULL_SIZE_WIDTH_USIZE * constants::FULL_SIZE_HEIGHT_USIZE / 1280 / 720) as f64)
+            }
+        }
     }
 
     pub fn power_consumption(&mut self) {
@@ -413,23 +418,26 @@ impl Simulator {
             temp_name.split("-").collect::<Vec<_>>()[0]
         };
 
-        // get power constant value
-        let small_wifi_constant = self.get_wifi_power_constant(&video_name, FrameSize::Small);
-        let full_wifi_constant = self.get_wifi_power_constant(&video_name, FrameSize::Full);
-        let small_soc_constant = self.get_soc_power_constant(&video_name, FrameSize::Small);
-        let full_soc_constant = self.get_soc_power_constant(&video_name, FrameSize::Full);
-//        println!("PPPPP {} {} {} {} {} {}",
-//                 small_wifi_constant, self.level_two_interpolate(small_wifi_constant, full_wifi_constant), full_wifi_constant,
-//                 small_soc_constant, self.level_two_interpolate(small_soc_constant, full_soc_constant), full_soc_constant);
+        // Get power constant value:
+        // 1080p with 1280x720 viewport -> only rendering
+        // 4k-360 with 1280x720 viewport -> rendering + reprojection
+        // level one should only scale normal version (Assume the size of level one is small so we can
+        // ignore the reprojection power)
+        // level two and three scale both rendering and reprojection
 
         // Power constant for each level
         let cache_hit_ratios = self.get_hit_ratios();
-        let wifi_level_one_power_constant = small_wifi_constant;
-        let wifi_level_two_power_constant = self.level_two_interpolate(small_wifi_constant, full_wifi_constant);
-        let wifi_level_three_power_constant = full_wifi_constant;
-        let soc_level_one_power_constant = small_soc_constant;
-        let soc_level_two_power_constant = self.level_two_interpolate(small_soc_constant, full_soc_constant);
-        let soc_level_three_power_constant = full_soc_constant;
+        let wifi_level_one_power_constant = self.get_wifi_power_constant(&video_name, CacheLevel::LevelOne);
+        let wifi_level_two_power_constant =  self.get_wifi_power_constant(&video_name, CacheLevel::LevelTwo);
+        let wifi_level_three_power_constant = self.get_wifi_power_constant(&video_name, CacheLevel::LevelThree);
+
+        let soc_level_one_power_constant = self.get_soc_power_constant(&video_name, CacheLevel::LevelOne);
+        let soc_level_two_power_constant = self.get_soc_power_constant(&video_name, CacheLevel::LevelTwo);
+        let soc_level_three_power_constant = self.get_soc_power_constant(&video_name, CacheLevel::LevelThree);
+
+//        println!("DEBUG {} {} {} {} {} {}",
+//                 wifi_level_one_power_constant, wifi_level_two_power_constant, wifi_level_three_power_constant,
+//                 soc_level_one_power_constant, soc_level_two_power_constant, soc_level_three_power_constant);
 
         // Computation for wifi:
         // Since we got hit rate on each level, the hit rate level of each frame means that they
@@ -494,7 +502,7 @@ impl Simulator {
             };
         }
 
-        println!("{:?}", self.get_hit_ratios());
+//        println!("{:?}", self.get_hit_ratios());
     }
 
     pub fn print_power_consumption(&self) {

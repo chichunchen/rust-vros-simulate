@@ -45,7 +45,7 @@ fn read_power_consumption_from_file<P: AsRef<Path>>(path: P) -> Result<Vec<Power
 fn compare_each_simulation(object_result: &String, dump_file: &String, cluster_json: &String,
                            threshold: f64, segment: usize, fov_width: usize, fov_height: usize,
                            level_two_width: usize, level_two_height: usize,
-                           power_constants: &Vec<PowerConstants>, power_constant_1224: &Vec<PowerConstants>) {
+                           power_constant_4k_360: &Vec<PowerConstants>, power_constant_1080p: &Vec<PowerConstants>) {
     let mut user_paths: Vec<DirEntry> = fs::read_dir(&object_result).unwrap().map(|r| r.unwrap()).collect();
     user_paths.sort_by_key(|dir| dir.path());
 
@@ -54,20 +54,20 @@ fn compare_each_simulation(object_result: &String, dump_file: &String, cluster_j
 //        println!("{}", user_file);
         let mut simulator = Simulator::new(&user_file, &dump_file, &cluster_json, threshold,
                                            segment, fov_width, fov_height, level_two_width, level_two_height,
-                                           power_constants.clone(),
-                                           power_constant_1224.clone(), false);
+                                           power_constant_4k_360.clone(),
+                                           power_constant_1080p.clone(), false);
         simulator.simulate();
         simulator.power_consumption();
         let mut simulator_base = Simulator::new(&user_file, &dump_file, &cluster_json,
                                                 threshold, segment, fov_width, fov_height, fov_width,
-                                                fov_height, power_constants.clone(),
-                                                power_constant_1224.clone(), false);
+                                                fov_height, power_constant_4k_360.clone(),
+                                                power_constant_1080p.clone(), false);
         simulator_base.simulate();
         simulator_base.power_consumption();
         let mut simulator_opt = Simulator::new(&user_file, &dump_file, &cluster_json,
                                                threshold, segment, fov_width, fov_height,
-                                               level_two_width, level_two_height, power_constants.clone(),
-                                               power_constant_1224.clone(), true);
+                                               level_two_width, level_two_height, power_constant_4k_360.clone(),
+                                               power_constant_1080p.clone(), true);
         simulator_opt.simulate();
         simulator_opt.power_consumption();
         println!("l1-l2-hier: {:?}, l1-only: {:?}, l1-l2-opt-hier: {:?}", simulator.get_hit_ratios(),
@@ -78,12 +78,12 @@ fn compare_each_simulation(object_result: &String, dump_file: &String, cluster_j
 fn single_simulate_pc(user_paths: &Vec<DirEntry>, dump_file: &String, cluster_json: &String,
                       threshold: f64, segment: usize, fov_width: usize, fov_height: usize,
                       level_two_width: usize, level_two_height: usize,
-                      power_constants_4k: &Vec<PowerConstants>, power_constant_1224: &Vec<PowerConstants>) {
+                      power_constants_4k_360: &Vec<PowerConstants>, power_constant_1080p: &Vec<PowerConstants>) {
     let mut pc_tuple: (f64, f64) = (0.0, 0.0);
     let mut count = 0;
     for path in user_paths {
         let user_file = path.path().to_str().unwrap().to_string();
-        let mut simulator_opt = Simulator::new(&user_file, &dump_file, &cluster_json, threshold, segment, fov_width, fov_height, level_two_width, level_two_height, power_constants_4k.clone(), power_constant_1224.clone(), true);
+        let mut simulator_opt = Simulator::new(&user_file, &dump_file, &cluster_json, threshold, segment, fov_width, fov_height, level_two_width, level_two_height, power_constants_4k_360.clone(), power_constant_1080p.clone(), true);
         simulator_opt.simulate();
         pc_tuple.0 += simulator_opt.get_wifi_pc();
         pc_tuple.1 += simulator_opt.get_soc_pc();
@@ -97,12 +97,12 @@ fn single_simulate_pc(user_paths: &Vec<DirEntry>, dump_file: &String, cluster_js
 fn single_simulate_hit(user_paths: &Vec<DirEntry>, dump_file: &String, cluster_json: &String,
                        threshold: f64, segment: usize, fov_width: usize, fov_height: usize,
                        level_two_width: usize, level_two_height: usize,
-                       power_constants: &Vec<PowerConstants>, power_constant_1224: &Vec<PowerConstants>) {
+                       power_constant_4k_360: &Vec<PowerConstants>, power_constant_1080p: &Vec<PowerConstants>) {
     let mut hit_ratios: (f64, f64, f64) = (0.0, 0.0, 0.0);
     let mut count = 0;
     for path in user_paths {
         let user_file = path.path().to_str().unwrap().to_string();
-        let mut simulator_opt = Simulator::new(&user_file, &dump_file, &cluster_json, threshold, segment, fov_width, fov_height, level_two_width, level_two_height, power_constants.clone(), power_constant_1224.clone(), true);
+        let mut simulator_opt = Simulator::new(&user_file, &dump_file, &cluster_json, threshold, segment, fov_width, fov_height, level_two_width, level_two_height, power_constant_4k_360.clone(), power_constant_1080p.clone(), true);
         simulator_opt.simulate();
         let x = simulator_opt.get_hit_ratios();
         hit_ratios.0 += x[0];
@@ -147,8 +147,8 @@ fn main() {
     let l2_height = args[9].parse::<usize>().unwrap();
     let mode = args[10].clone();
 
-    let power_constant_4k: Vec<PowerConstants> = read_power_consumption_from_file(Path::new("power_4k.json")).unwrap();
-    let power_constant_1224: Vec<PowerConstants> = read_power_consumption_from_file(Path::new("power_1224.json")).unwrap();
+    let power_constant_4k_360: Vec<PowerConstants> = read_power_consumption_from_file(Path::new("power_4k_360.json")).unwrap();
+    let power_constant_1080p: Vec<PowerConstants> = read_power_consumption_from_file(Path::new("power_1080p.json")).unwrap();
 
 //    compare_each_simulation(&object_result, &dump_file, &cluster_json, threshold, segment, width, height, l2_width, l2_height, &power_constant);
 //    batch_simulation(&object_result, &dump_file, &cluster_json, threshold, segment, &power_constant);
@@ -160,12 +160,12 @@ fn main() {
         "power" => {
             single_simulate_pc(&user_paths, &dump_file, &cluster_json, threshold, segment,
                                width, height, l2_width,
-                               l2_height, &power_constant_4k, &power_constant_1224);
+                               l2_height, &power_constant_4k_360, &power_constant_1080p);
         }
         "hit" => {
             single_simulate_hit(&user_paths, &dump_file, &cluster_json, threshold, segment,
                                 width, height, l2_width,
-                                l2_height, &power_constant_4k, &power_constant_1224);
+                                l2_height, &power_constant_4k_360, &power_constant_1080p);
         }
         _ => assert!(false),
     }
