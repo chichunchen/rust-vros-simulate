@@ -374,16 +374,18 @@ impl Simulator {
     fn get_wifi_power_constant(&self, video_name: &str, size: CacheLevel) -> f64 {
         let mut wifi_name: String = video_name.to_owned().to_string();
         wifi_name.push_str("_WIFI");
-        let wifi_power = self.power_constant_360.iter().find(|&x| x.name == wifi_name).unwrap().value;
+        let wifi_power_not_360 = self.power_constant_not_360.iter().find(|&x| x.name == wifi_name).unwrap().value;
+        let wifi_power_360 = self.power_constant_360.iter().find(|&x| x.name == wifi_name).unwrap().value;
         match size {
             CacheLevel::LevelOne => {
-                wifi_power * (self.fov_width * self.fov_height / 1280 / 720) as f64
+                wifi_power_not_360 * (self.fov_width * self.fov_height / 1280 / 720) as f64
             }
             CacheLevel::LevelTwo => {
-                wifi_power * (self.level_two_width * self.level_two_height / 1280 / 720) as f64
+                wifi_power_360 * ((self.level_two_width * self.level_two_height) as f64 /
+                    constants::FULL_SIZE_WIDTH_USIZE as f64 / constants::FULL_SIZE_HEIGHT_USIZE as f64)
             }
             CacheLevel::LevelThree => {
-                wifi_power * (constants::FULL_SIZE_WIDTH_USIZE * constants::FULL_SIZE_HEIGHT_USIZE / 1280 / 720) as f64
+                wifi_power_360
             }
         }
     }

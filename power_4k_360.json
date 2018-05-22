@@ -1,13 +1,5 @@
 [
   {
-    "name": "Diving_WIFI",
-    "value": 318.00226813811946
-  },
-  {
-    "name": "Diving_SOC",
-    "value": 413.879251255758
-  },
-  {
     "name": "Elephant_WIFI",
     "value": 355.14874912280703
   },
@@ -18,42 +10,34 @@
 ,
   {
     "name": "Timelapse_WIFI",
-    "value": 459.52106049101513
+    "value": 337.8103713450292
   },
   {
     "name": "Timelapse_SOC",
-    "value": 403.54892741061735
+    "value": 4034.926912949039
   },
   {
     "name": "Paris_WIFI",
-    "value": 387.22269301739556
+    "value": 326.522399122807
   },
   {
     "name": "Paris_SOC",
-    "value": 430.44743888764276
+    "value": 4019.510108187135
   },
   {
     "name": "Rhino_WIFI",
-    "value": 75.62248245614029
+    "value": 284.177549122807
   },
   {
     "name": "Rhino_SOC",
-    "value": 3245.1562674463935
+    "value": 3892.9772034252296
   },
   {
     "name": "Rollercoaster_WIFI",
-    "value": 70.65156470722255
+    "value": 378.30801868802445
   },
   {
     "name": "Rollercoaster_SOC",
-    "value": 3603.7657804255855
-  },
-  {
-    "name": "Venice_WIFI",
-    "value": 317.1256150044853
-  },
-  {
-    "name": "Venice_SOC",
-    "value": 380.75382076962484
+    "value": 3936.285384088642
   }
 ]
