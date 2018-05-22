@@ -383,7 +383,7 @@ impl Simulator {
                 wifi_power * (self.level_two_width * self.level_two_height / 1280 / 720) as f64
             }
             CacheLevel::LevelThree => {
-                wifi_power * (constants::FULL_SIZE_WIDTH_USIZE * constants::FULL_SIZE_HEIGHT_USIZE * self.level_two_height / 1280 / 720) as f64
+                wifi_power * (constants::FULL_SIZE_WIDTH_USIZE * constants::FULL_SIZE_HEIGHT_USIZE / 1280 / 720) as f64
             }
         }
     }
