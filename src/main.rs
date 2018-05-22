@@ -24,23 +24,6 @@ enum OptimizeVersion {
     O1,
 }
 
-struct PythonFor(isize, isize, isize);
-
-impl Iterator for PythonFor {
-    type Item = isize;
-
-    #[inline]
-    fn next(&mut self) -> Option<isize> {
-        if self.0 < self.1 {
-            let v = self.0;
-            self.0 = v + self.2;
-            Some(v)
-        } else {
-            None
-        }
-    }
-}
-
 fn read_power_consumption_from_file<P: AsRef<Path>>(path: P) -> Result<Vec<PowerConstants>, Box<Error>> {
     let file = File::open(path)?;
     let u = serde_json::from_reader(file)?;
@@ -86,10 +69,13 @@ fn single_simulate_pc(user_paths: &Vec<DirEntry>, dump_file: &String, cluster_js
                       level_two_width: usize, level_two_height: usize,
                       power_constants_4k_360: &Vec<PowerConstants>, power_constant_1080p: &Vec<PowerConstants>, opt: OptimizeVersion) {
     let mut pc_tuple: (f64, f64) = (0.0, 0.0);
+    let mut hit_ratios: (f64, f64, f64) = (0.0, 0.0, 0.0);
     let mut count = 0;
+    let mut resend_segment = 0.0;
+
     for path in user_paths {
         let user_file = path.path().to_str().unwrap().to_string();
-        let mut simulator_opt = {
+        let mut simulator = {
             match opt {
                 OptimizeVersion::O0 =>
                     Simulator::new(&user_file, &dump_file, &cluster_json, threshold, segment, fov_width, fov_height,
@@ -101,14 +87,30 @@ fn single_simulate_pc(user_paths: &Vec<DirEntry>, dump_file: &String, cluster_js
                                    power_constant_1080p.clone(), true)
             }
         };
-        simulator_opt.simulate();
-        pc_tuple.0 += simulator_opt.get_wifi_pc();
-        pc_tuple.1 += simulator_opt.get_soc_pc();
+        simulator.simulate();
+        pc_tuple.0 += simulator.get_wifi_pc();
+        pc_tuple.1 += simulator.get_soc_pc();
+
+        let x = simulator.get_hit_ratios();
+        hit_ratios.0 += x[0];
+        hit_ratios.1 += x[1];
+        hit_ratios.2 += x[2];
+
+        resend_segment += simulator.get_segment_resend_cnt() as f64;
+
         count += 1;
 //        simulator_opt.print_power_consumption();
     }
+
+    hit_ratios.0 /= count as f64;
+    hit_ratios.1 /= count as f64;
+    hit_ratios.2 /= count as f64;
+
+    resend_segment /= count as f64;
+
     // wifi soc screen level_2
-    println!("{} {} {} {}", pc_tuple.0 / count as f64, pc_tuple.1 / count as f64, fov_width, level_two_width);
+//    println!("{} {} {} {}", pc_tuple.0 / count as f64, pc_tuple.1 / count as f64, fov_width, level_two_width);
+    println!("{} {} {} {} {} {} {}", pc_tuple.0 / count as f64, pc_tuple.1 / count as f64, threshold, hit_ratios.0, hit_ratios.1, hit_ratios.2, resend_segment);
 }
 
 fn single_simulate_hit(user_paths: &Vec<DirEntry>, dump_file: &String, cluster_json: &String,
@@ -141,7 +143,9 @@ fn single_simulate_hit(user_paths: &Vec<DirEntry>, dump_file: &String, cluster_j
     hit_ratios.0 /= count as f64;
     hit_ratios.1 /= count as f64;
     hit_ratios.2 /= count as f64;
-    println!("{} {} {} {} {}", hit_ratios.0, hit_ratios.1, hit_ratios.2, fov_width, level_two_width);
+
+//    println!("{} {} {} {} {}", hit_ratios.0, hit_ratios.1, hit_ratios.2, fov_width, level_two_width);
+    println!("{} {} {} {}", hit_ratios.0, hit_ratios.1, hit_ratios.2, threshold);
 }
 
 //#[allow(dead_code)]
