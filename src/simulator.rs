@@ -40,6 +40,7 @@ pub struct Simulator {
     cluster_json: String,
     threshold: f64,
     segment: usize,
+    segment_count: usize,
     fov_width: usize,
     fov_height: usize,
     path_list: Vec<Vec<Viewport>>,
@@ -88,6 +89,7 @@ impl Simulator {
             cluster_json: cluster_json.to_string(),
             threshold,
             segment,
+            segment_count: 0,
             fov_width,
             fov_height,
             path_list: vec![],
@@ -281,6 +283,9 @@ impl Simulator {
             let width = self.fov_width;
             let height = self.fov_height;
 
+            // Variables for wifi calculation
+//            let resend_flag = false;
+
             if self.path_list.len() > k {
                 for (path, path_viewport) in self.path_list[k].iter().enumerate() {
                     let current_ratio = path_viewport.get_cover_result(user_fov);
@@ -336,16 +341,21 @@ impl Simulator {
                     }
                 }
                 self.hit_list_for_soc.push(hit_soc_cache_pair.0.clone());
+            }
 
-                // Count resend segments for network power calculation
+            // Count resend segments for network power calculation
+            if k % self.segment == self.segment - 1 {
                 match hit_soc_cache_pair.1 {
                     CacheLevel::LevelThree =>  self.segment_resend_counter += 1,
                     _ => ()
                 }
             }
         }
+
+        self.segment_count = (self.hit_list_for_soc.len() as f64 / self.segment as f64).ceil() as usize;
+
 //        assert_eq!(self.hit_list.len(), self.user_fov_list.len());
-//        println!("total segment: {}, segment_resend_counter: {}", self.user_fov_list.len(), self.segment_resend_counter);
+//        println!("total segment: {}, segment_resend_counter: {}", self.user_fov_list.len() / 20, self.segment_resend_counter);
 
         // fill wifi_pc and soc_pc
         self.power_consumption();
@@ -387,16 +397,15 @@ impl Simulator {
         let mut wifi_name: String = video_name.to_owned().to_string();
         wifi_name.push_str("_WIFI");
         let wifi_power_not_360 = self.power_constant_not_360.iter().find(|&x| x.name == wifi_name).unwrap().value;
+        let wifi_power_360 = self.power_constant_360.iter().find(|&x| x.name == wifi_name).unwrap().value;
         match size {
             CacheLevel::LevelOne => {
                 wifi_power_not_360 * (self.fov_width as f64 * self.fov_height as f64 / 1920.0 / 1080.0)
-            }
-            CacheLevel::LevelTwo => {
-                wifi_power_not_360 * (self.level_two_width as f64 * self.level_two_height as f64 / 1920.0 / 1080.0)
-            }
+            },
             CacheLevel::LevelThree => {
-                wifi_power_not_360 * (constants::FULL_SIZE_WIDTH_USIZE as f64 * constants::FULL_SIZE_HEIGHT_USIZE as f64 / 1920.0 / 1080.0)
-            }
+                wifi_power_360
+            },
+            _ => panic!("l2 get_wifi_power_constant")
         }
     }
 
@@ -506,11 +515,11 @@ impl Simulator {
 //            };
         } else {
             self.wifi_pc = {
-                let total_segment = self.hit_list_for_soc.len();
-                let no_resend_segment = total_segment - self.segment_resend_counter;
-                let no_resend_power = (no_resend_segment as f64 / total_segment as f64) * wifi_level_one_power_constant;
-                let resend_power = (self.segment_resend_counter as f64 / total_segment as f64) * (wifi_level_one_power_constant + wifi_level_three_power_constant);
+                let no_resend_segment = self.segment_count - self.segment_resend_counter;
+                let no_resend_power = (no_resend_segment as f64 / self.segment_count as f64) * wifi_level_one_power_constant;
+                let resend_power = (self.segment_resend_counter as f64 / self.segment_count as f64) * (wifi_level_one_power_constant + wifi_level_three_power_constant);
                 assert_eq!(cache_hit_ratios[1], 0.0);
+//                println!("{} {}", no_resend_power, resend_power);
                 no_resend_power + resend_power
             };
             self.soc_pc = {
@@ -538,5 +547,9 @@ impl Simulator {
 
     pub fn get_segment_resend_cnt(&self) -> usize {
         self.segment_resend_counter
+    }
+
+    pub fn get_segment_count(&self) -> usize {
+        self.segment_count
     }
 }

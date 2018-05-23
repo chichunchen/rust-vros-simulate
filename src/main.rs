@@ -71,7 +71,7 @@ fn single_simulate_pc(user_paths: &Vec<DirEntry>, dump_file: &String, cluster_js
     let mut pc_tuple: (f64, f64) = (0.0, 0.0);
     let mut hit_ratios: (f64, f64, f64) = (0.0, 0.0, 0.0);
     let mut count = 0;
-    let mut resend_segment = 0.0;
+    let mut no_resend_segment_rate = 0.0;
 
     for path in user_paths {
         let user_file = path.path().to_str().unwrap().to_string();
@@ -96,7 +96,7 @@ fn single_simulate_pc(user_paths: &Vec<DirEntry>, dump_file: &String, cluster_js
         hit_ratios.1 += x[1];
         hit_ratios.2 += x[2];
 
-        resend_segment += simulator.get_segment_resend_cnt() as f64;
+        no_resend_segment_rate += 1.0 - simulator.get_segment_resend_cnt() as f64 / simulator.get_segment_count() as f64;
 
         count += 1;
 //        simulator_opt.print_power_consumption();
@@ -106,11 +106,11 @@ fn single_simulate_pc(user_paths: &Vec<DirEntry>, dump_file: &String, cluster_js
     hit_ratios.1 /= count as f64;
     hit_ratios.2 /= count as f64;
 
-    resend_segment /= count as f64;
+    no_resend_segment_rate /= count as f64;
 
     // wifi soc screen level_2
 //    println!("{} {} {} {}", pc_tuple.0 / count as f64, pc_tuple.1 / count as f64, fov_width, level_two_width);
-    println!("{} {} {} {} {} {} {}", pc_tuple.0 / count as f64, pc_tuple.1 / count as f64, threshold, hit_ratios.0, hit_ratios.1, hit_ratios.2, resend_segment);
+    println!("{} {} {} {} {} {} {}", pc_tuple.0 / count as f64, pc_tuple.1 / count as f64, threshold, hit_ratios.0, hit_ratios.1, hit_ratios.2, no_resend_segment_rate);
 }
 
 fn single_simulate_hit(user_paths: &Vec<DirEntry>, dump_file: &String, cluster_json: &String,
@@ -121,7 +121,7 @@ fn single_simulate_hit(user_paths: &Vec<DirEntry>, dump_file: &String, cluster_j
     let mut count = 0;
     for path in user_paths {
         let user_file = path.path().to_str().unwrap().to_string();
-        let mut simulator_opt = {
+        let mut simulator = {
             match opt {
                 OptimizeVersion::O0 =>
                     Simulator::new(&user_file, &dump_file, &cluster_json, threshold, segment, fov_width, fov_height,
@@ -133,8 +133,8 @@ fn single_simulate_hit(user_paths: &Vec<DirEntry>, dump_file: &String, cluster_j
                                    power_constant_1080p.clone(), true)
             }
         };
-        simulator_opt.simulate();
-        let x = simulator_opt.get_hit_ratios();
+        simulator.simulate();
+        let x = simulator.get_hit_ratios();
         hit_ratios.0 += x[0];
         hit_ratios.1 += x[1];
         hit_ratios.2 += x[2];
