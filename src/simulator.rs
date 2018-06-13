@@ -1,4 +1,4 @@
-use ds::{Frame, Viewport};
+use ds::{Frame, Viewport, Optimization};
 use constants;
 
 use std::io::prelude::*;
@@ -51,7 +51,7 @@ pub struct Simulator {
     segment_resend_counter: usize,
     power_constant_360: Vec<PowerConstants>,
     power_constant_not_360: Vec<PowerConstants>,
-    opt_flag: bool,
+    opt_flag: Optimization,
     wifi_pc: f64,
     soc_pc: f64,
 }
@@ -78,7 +78,7 @@ impl Simulator {
     pub fn new(user_file: &String, dump_file: &String, cluster_json: &String, threshold: f64,
                segment: usize, fov_width: usize, fov_height: usize, level_two_width: usize,
                level_two_height: usize, power_constant_1080p_360: Vec<PowerConstants>,
-               power_constant_1080p: Vec<PowerConstants>, opt_flag: bool) -> Self {
+               power_constant_1080p: Vec<PowerConstants>, opt_flag: Optimization) -> Self {
         let mut level_two_height = level_two_height;
         if level_two_height > constants::FULL_SIZE_HEIGHT_USIZE {
             level_two_height = constants::FULL_SIZE_HEIGHT_USIZE;
@@ -204,12 +204,36 @@ impl Simulator {
             };
             (hit, CacheLevel::LevelOne)
         } else {
-            // predict if level-two is actually miss before downloading segment from cloud server
             if self.is_hierarchical() {
                 panic!("hierarchical is deprecated now!");
                 self.compare_from_level_two(&fov, &user_fov, index, path)
             } else {
-                self.compare_from_level_three(index, path)
+                // TODO check if the cloud server have the other path that has coverage high enough
+                // to be sent back to user.
+                match self.opt_flag {
+                    Optimization::O0 => {
+                        // find if server has any segment having the coverage greater then threshold
+                        for (p, path_viewport) in self.path_list[index].iter().enumerate() {
+                            let current_ratio = path_viewport.get_cover_result(user_fov);
+                            if current_ratio >= self.threshold {
+                                println!("[L1 frame_id: {}, path: {}] current (path, ratio): ({}, {})", index, path, p, current_ratio);
+                                hit = Hit {
+                                    index,
+                                    ratio: current_ratio,
+                                    cache_level: CacheLevel::LevelOne,
+                                    path,
+                                    width,
+                                    height,
+                                };
+                                return (hit, CacheLevel::LevelOne);
+                            }
+                        }
+                        self.compare_from_level_three(index, path)
+                    }
+                    _ => {
+                        self.compare_from_level_three(index, path)
+                    }
+                }
             }
         }
     }
@@ -274,6 +298,7 @@ impl Simulator {
     /// now) is still have the coverage below the threshold, the simulator then send back the Full
     /// frame.
     pub fn simulate(&mut self) {
+        println!("simulate");
         let mut hit_soc_cache_pair: (Hit, CacheLevel) = (Hit {
             index: 0,
             ratio: 0.0,
@@ -309,7 +334,7 @@ impl Simulator {
                     }
 
                     // the first frame in the segment
-                    println!("[key {}] path: {:?}, ratio: {}", frame_id, key_frame_ratio_path, key_frame_ratio);
+                    // println!("[key {}] path: {:?}, ratio: {}", frame_id, key_frame_ratio_path, key_frame_ratio);
                     hit_soc_cache_pair = self.compare_from_level_one(&current_viewport.unwrap(), &user_fov, frame_id, key_frame_ratio_path.unwrap(), width, height);
                 } else {
                     // the rest frames except for the first one in the segment
@@ -342,6 +367,10 @@ impl Simulator {
                             match hit_soc_cache_pair.1 {
                                 CacheLevel::LevelOne => {
                                     hit_soc_cache_pair = self.compare_from_level_one(&current_viewport, &user_fov, frame_id, key_frame_ratio_path.unwrap(), width, height);
+                                    if hit_soc_cache_pair.0.path != key_frame_ratio_path.unwrap() {
+                                        key_frame_ratio_path = Some(hit_soc_cache_pair.0.path);
+                                        // TODO pc-wifi has to count additional segment
+                                    }
                                 }
                                 CacheLevel::LevelTwo => {
                                     assert!(false)
@@ -494,53 +523,21 @@ impl Simulator {
         // look at). The computation of level-1 and level-2 in this optimization is the same in this
         // VR system, however, when computing the power consumption that level-2 has missed, we could
         // simply add up the power constants of level-1 + level-3.
-        if self.is_hierarchical() && (!self.opt_flag) {
-            panic!("with l2");
-//            self.wifi_pc = {
-//                let first_level = cache_hit_ratios[0] * wifi_level_one_power_constant;
-//                let second_level = cache_hit_ratios[1] * (wifi_level_one_power_constant + wifi_level_two_power_constant);
-//                let third_level = cache_hit_ratios[2] * (wifi_level_one_power_constant + wifi_level_two_power_constant + wifi_level_three_power_constant);
-//                first_level + second_level + third_level
-//            };
-//            self.soc_pc = {
-//                let first_level = cache_hit_ratios[0] * soc_level_one_power_constant;
-//                let second_level = cache_hit_ratios[1] * soc_level_two_power_constant;
-//                let third_level = cache_hit_ratios[2] * soc_level_three_power_constant;
-//                println!("FFFF {} {} {}", first_level, second_level, third_level);
-//                first_level + second_level + third_level
-//            };
-        } else if self.is_hierarchical() && self.opt_flag {
-            panic!("with l2 + opt");
-//            self.wifi_pc = {
-//                let first_level = cache_hit_ratios[0] * wifi_level_one_power_constant;
-//                let second_level = cache_hit_ratios[1] * (wifi_level_one_power_constant + wifi_level_two_power_constant);
-//                let third_level = cache_hit_ratios[2] * (wifi_level_one_power_constant + wifi_level_three_power_constant);
-//                println!("LL {} {} {}", first_level, second_level, third_level);
-//                first_level + second_level + third_level
-//            };
-//            self.soc_pc = {
-//                let first_level = cache_hit_ratios[0] * soc_level_one_power_constant;
-//                let second_level = cache_hit_ratios[1] * soc_level_two_power_constant;
-//                let third_level = cache_hit_ratios[2] * soc_level_three_power_constant;
-//                println!("LL {} {} {}", first_level, second_level, third_level);
-//                first_level + second_level + third_level
-//            };
-        } else {
-            self.wifi_pc = {
-                let no_resend_segment = self.segment_count - self.segment_resend_counter;
-                let no_resend_power = (no_resend_segment as f64 / self.segment_count as f64) * wifi_level_one_power_constant;
-                let resend_power = (self.segment_resend_counter as f64 / self.segment_count as f64) * (wifi_level_one_power_constant + wifi_level_three_power_constant);
-                assert_eq!(cache_hit_ratios[1], 0.0);
+        self.wifi_pc = {
+            let no_resend_segment = self.segment_count - self.segment_resend_counter;
+            let no_resend_power = (no_resend_segment as f64 / self.segment_count as f64) * wifi_level_one_power_constant;
+            let resend_power = (self.segment_resend_counter as f64 / self.segment_count as f64) * (wifi_level_one_power_constant + wifi_level_three_power_constant);
+            assert_eq!(cache_hit_ratios[1], 0.0);
 //                println!("{} {}", no_resend_power, resend_power);
-                no_resend_power + resend_power
-            };
-            self.soc_pc = {
-                let first_level = cache_hit_ratios[0] * soc_level_one_power_constant;
-                let third_level = cache_hit_ratios[2] * soc_level_three_power_constant;
-                assert_eq!(cache_hit_ratios[1], 0.0);
-                first_level + third_level
-            };
-        }
+            no_resend_power + resend_power
+        };
+        self.soc_pc = {
+            let first_level = cache_hit_ratios[0] * soc_level_one_power_constant;
+            let third_level = cache_hit_ratios[2] * soc_level_three_power_constant;
+            assert_eq!(cache_hit_ratios[1], 0.0);
+            first_level + third_level
+        };
+
 
 //        println!("{:?}", self.get_hit_ratios());
     }

@@ -128,6 +128,12 @@ impl Frame {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum Optimization {
+    None,
+    O0,
+    O1,
+}
 
 #[test]
 fn test_trace() {
