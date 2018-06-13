@@ -109,7 +109,7 @@ impl Simulator {
         sim
     }
 
-    // update self.path_list
+    /// Update self.path_list
     fn parse_tracing_to_path_list(&mut self) {
         let file = File::open(&self.dump_file).unwrap();
         let buf_reader = BufReader::new(&file);
@@ -166,7 +166,7 @@ impl Simulator {
         }
     }
 
-    // update user_fov_list
+    /// update user_fov_list
     fn parse_user_data(&mut self) {
         let file = File::open(&self.user_file).unwrap();
         let buf_reader = BufReader::new(file);
@@ -206,6 +206,7 @@ impl Simulator {
         } else {
             // predict if level-two is actually miss before downloading segment from cloud server
             if self.is_hierarchical() {
+                panic!("hierarchical is deprecated now!");
                 self.compare_from_level_two(&fov, &user_fov, index, path)
             } else {
                 self.compare_from_level_three(index, path)
@@ -264,9 +265,15 @@ impl Simulator {
         }
     }
 
-    // simulate with hierarchical or non-hierarchical with segment and threshold implicitly
+    /// Simulate with hierarchical or non-hierarchical with segment and threshold implicitly
+    /// Mechanism:
+    /// 1. Client start to watch the 360 video and for our video streaming system, it also send the
+    /// fov coordination, id of segment to server.
+    /// 2. Server get the request, it then use the segment id to find if the segments match the id
+    /// covers the user fov. If the segment with the highest coverage (only look for the first frame
+    /// now) is still have the coverage below the threshold, the simulator then send back the Full
+    /// frame.
     pub fn simulate(&mut self) {
-        let mut current_path: Option<usize> = None;
         let mut hit_soc_cache_pair: (Hit, CacheLevel) = (Hit {
             index: 0,
             ratio: 0.0,
@@ -275,86 +282,91 @@ impl Simulator {
             width: 0,
             height: 0,
         }, CacheLevel::LevelOne);
-        for (k, user_fov) in self.user_fov_list.iter().enumerate() {
-            // Variables for soc calculation
-            let mut max_ratio: f64 = f64::NEG_INFINITY;
-            let mut max_ratio_path: Option<usize> = None;
-            let mut temp_viewport: Option<&Viewport> = None;
+
+        let mut key_frame_ratio: f64 = f64::NEG_INFINITY; // max coverage ratio for the key frame
+        let mut key_frame_ratio_path: Option<usize> = None; // most matched path from key frame
+
+        // iterate user viewport in order to count the fov-hit for power consumption and the
+        // segment hit for network bandwidth
+        for (frame_id, user_fov) in self.user_fov_list.iter().enumerate() {
             let width = self.fov_width;
             let height = self.fov_height;
 
-            // Variables for wifi calculation
-//            let resend_flag = false;
-
-            if self.path_list.len() > k {
-                for (path, path_viewport) in self.path_list[k].iter().enumerate() {
-                    let current_ratio = path_viewport.get_cover_result(user_fov);
-                    if max_ratio < current_ratio {
-                        max_ratio = current_ratio;
-                        max_ratio_path = Some(path);
-                        temp_viewport = Some(path_viewport);
+            if self.path_list.len() > frame_id {
+                if frame_id % self.segment == 0 {
+                    // 1. Find the segment with the largest coverage in the first frame
+                    // 2. Update the maximum coverage ratio for the current segment
+                    let mut current_viewport: Option<&Viewport> = None;
+                    key_frame_ratio = f64::NEG_INFINITY;
+                    key_frame_ratio_path = None;
+                    for (path_id, path_viewport) in self.path_list[frame_id].iter().enumerate() {
+                        let current_ratio = path_viewport.get_cover_result(user_fov);
+                        if key_frame_ratio < current_ratio {
+                            key_frame_ratio = current_ratio;
+                            key_frame_ratio_path = Some(path_id);
+                            current_viewport = Some(path_viewport);
+                        }
                     }
-                }
 
-                // Compute SOC
-                if k % self.segment == 0 {
                     // the first frame in the segment
-                    current_path = max_ratio_path;
-                    hit_soc_cache_pair = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height);
+                    println!("[key {}] path: {:?}, ratio: {}", frame_id, key_frame_ratio_path, key_frame_ratio);
+                    hit_soc_cache_pair = self.compare_from_level_one(&current_viewport.unwrap(), &user_fov, frame_id, key_frame_ratio_path.unwrap(), width, height);
                 } else {
                     // the rest frames except for the first one in the segment
-//                    println!("k: {}, path: {}, ratio: {}", k, max_ratio_path.unwrap(), max_ratio);
+                    if self.path_list[frame_id].len() > key_frame_ratio_path.unwrap() {
+                        let current_viewport = self.path_list[frame_id][key_frame_ratio_path.unwrap()];
 
-                    if self.is_hierarchical() {
-                        // hierarchical
-                        match hit_soc_cache_pair.1 {
-                            CacheLevel::LevelOne => {
-                                if current_path == max_ratio_path {
-                                    hit_soc_cache_pair = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height);
-                                } else {
-                                    hit_soc_cache_pair = self.compare_from_level_three(k, max_ratio_path.unwrap());
+                        if self.is_hierarchical() {
+                            // hierarchical
+                            // Deprecated
+//                        match hit_soc_cache_pair.1 {
+//                            CacheLevel::LevelOne => {
+//                                if current_path == key_frame_ratio_path {
+//                                    hit_soc_cache_pair = self.compare_from_level_one(&current_viewport, &user_fov, frame_id, key_frame_ratio_path.unwrap(), width, height);
+//                                } else {
+//                                    hit_soc_cache_pair = self.compare_from_level_three(frame_id, key_frame_ratio_path.unwrap());
+//                                }
+//                            }
+//                            CacheLevel::LevelTwo => {
+//                                if current_path == key_frame_ratio_path {
+//                                    hit_soc_cache_pair = self.compare_from_level_two(&current_viewport, &user_fov, frame_id, key_frame_ratio_path.unwrap());
+//                                } else {
+//                                    hit_soc_cache_pair = self.compare_from_level_three(frame_id, current_path.unwrap());
+//                                }
+//                            }
+//                            CacheLevel::LevelThree => {
+//                                hit_soc_cache_pair = self.compare_from_level_three(frame_id, current_path.unwrap());
+//                            }
+//                        }
+                        } else {
+                            match hit_soc_cache_pair.1 {
+                                CacheLevel::LevelOne => {
+                                    hit_soc_cache_pair = self.compare_from_level_one(&current_viewport, &user_fov, frame_id, key_frame_ratio_path.unwrap(), width, height);
+                                }
+                                CacheLevel::LevelTwo => {
+                                    assert!(false)
+                                }
+                                CacheLevel::LevelThree => {
+                                    hit_soc_cache_pair = self.compare_from_level_three(frame_id, key_frame_ratio_path.unwrap())
                                 }
                             }
-                            CacheLevel::LevelTwo => {
-                                if current_path == max_ratio_path {
-                                    hit_soc_cache_pair = self.compare_from_level_two(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap());
-                                } else {
-                                    hit_soc_cache_pair = self.compare_from_level_three(k, current_path.unwrap());
-                                }
-                            }
-                            CacheLevel::LevelThree => {
-                                hit_soc_cache_pair = self.compare_from_level_three(k, current_path.unwrap());
-                            }
-                        }
-                    } else {
-                        match hit_soc_cache_pair.1 {
-                            CacheLevel::LevelOne => {
-                                if current_path == max_ratio_path {
-                                    hit_soc_cache_pair = self.compare_from_level_one(&temp_viewport.unwrap(), &user_fov, k, max_ratio_path.unwrap(), width, height);
-                                } else {
-                                    hit_soc_cache_pair = self.compare_from_level_three(k, max_ratio_path.unwrap());
-                                }
-                            }
-                            CacheLevel::LevelTwo => assert!(false),
-                            CacheLevel::LevelThree => hit_soc_cache_pair = self.compare_from_level_three(k, current_path.unwrap()),
                         }
                     }
                 }
-                self.hit_list_for_soc.push(hit_soc_cache_pair.0.clone());
             }
+            self.hit_list_for_soc.push(hit_soc_cache_pair.0.clone());
 
+            // Network Calculation
             // Count resend segments for network power calculation
-            if k % self.segment == self.segment - 1 {
+            if frame_id % self.segment == self.segment - 1 {
                 match hit_soc_cache_pair.1 {
-                    CacheLevel::LevelThree =>  self.segment_resend_counter += 1,
+                    CacheLevel::LevelThree => self.segment_resend_counter += 1,
                     _ => ()
                 }
             }
         }
 
         self.segment_count = (self.hit_list_for_soc.len() as f64 / self.segment as f64).ceil() as usize;
-
-//        assert_eq!(self.hit_list.len(), self.user_fov_list.len());
 //        println!("total segment: {}, segment_resend_counter: {}", self.user_fov_list.len() / 20, self.segment_resend_counter);
 
         // fill wifi_pc and soc_pc
@@ -401,10 +413,10 @@ impl Simulator {
         match size {
             CacheLevel::LevelOne => {
                 wifi_power_not_360 * (self.fov_width as f64 * self.fov_height as f64 / 1920.0 / 1080.0)
-            },
+            }
             CacheLevel::LevelThree => {
                 wifi_power_360
-            },
+            }
             _ => panic!("l2 get_wifi_power_constant")
         }
     }
