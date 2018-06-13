@@ -54,6 +54,7 @@ pub struct Simulator {
     opt_flag: Optimization,
     wifi_pc: f64,
     soc_pc: f64,
+    save_in_O0: usize,
 }
 
 #[derive(Deserialize, Debug)]
@@ -75,6 +76,7 @@ fn read_json_cluster_from_file<P: AsRef<Path>>(path: P) -> Result<Vec<VideoObjec
 }
 
 impl Simulator {
+    #[inline(always)]
     pub fn new(user_file: &String, dump_file: &String, cluster_json: &String, threshold: f64,
                segment: usize, fov_width: usize, fov_height: usize, level_two_width: usize,
                level_two_height: usize, power_constant_1080p_360: Vec<PowerConstants>,
@@ -103,6 +105,7 @@ impl Simulator {
             opt_flag,
             wifi_pc: 0.0,
             soc_pc: 0.0,
+            save_in_O0: 0,
         };
         sim.parse_tracing_to_path_list();
         sim.parse_user_data();
@@ -206,7 +209,7 @@ impl Simulator {
         } else {
             if self.is_hierarchical() {
                 panic!("hierarchical is deprecated now!");
-                self.compare_from_level_two(&fov, &user_fov, index, path)
+//                self.compare_from_level_two(&fov, &user_fov, index, path)
             } else {
                 // TODO check if the cloud server have the other path that has coverage high enough
                 // to be sent back to user.
@@ -216,12 +219,12 @@ impl Simulator {
                         for (p, path_viewport) in self.path_list[index].iter().enumerate() {
                             let current_ratio = path_viewport.get_cover_result(user_fov);
                             if current_ratio >= self.threshold {
-                                println!("[L1 frame_id: {}, path: {}] current (path, ratio): ({}, {})", index, path, p, current_ratio);
+//                                println!("[L1 frame_id: {}, path: {}] current (path, ratio): ({}, {})", index, path, p, current_ratio);
                                 hit = Hit {
                                     index,
                                     ratio: current_ratio,
                                     cache_level: CacheLevel::LevelOne,
-                                    path,
+                                    path: p,
                                     width,
                                     height,
                                 };
@@ -267,6 +270,7 @@ impl Simulator {
         }
     }
 
+    #[inline(always)]
     fn compare_from_level_three(&self, index: usize, path: usize) -> (Hit, CacheLevel) {
 //        println!("L3 hit {} at {}", index, 1);
         let hit: Hit;
@@ -281,12 +285,9 @@ impl Simulator {
         (hit, CacheLevel::LevelThree)
     }
 
+    #[inline(always)]
     fn is_hierarchical(&self) -> bool {
-        if self.fov_width == self.level_two_width && self.fov_height == self.level_two_height {
-            false
-        } else {
-            true
-        }
+        !(self.fov_width == self.level_two_width && self.fov_height == self.level_two_height)
     }
 
     /// Simulate with hierarchical or non-hierarchical with segment and threshold implicitly
@@ -298,7 +299,6 @@ impl Simulator {
     /// now) is still have the coverage below the threshold, the simulator then send back the Full
     /// frame.
     pub fn simulate(&mut self) {
-        println!("simulate");
         let mut hit_soc_cache_pair: (Hit, CacheLevel) = (Hit {
             index: 0,
             ratio: 0.0,
@@ -370,6 +370,7 @@ impl Simulator {
                                     if hit_soc_cache_pair.0.path != key_frame_ratio_path.unwrap() {
                                         key_frame_ratio_path = Some(hit_soc_cache_pair.0.path);
                                         // TODO pc-wifi has to count additional segment
+                                        self.save_in_O0 += 1;
                                     }
                                 }
                                 CacheLevel::LevelTwo => {
@@ -413,6 +414,7 @@ impl Simulator {
         count_arr
     }
 
+    #[inline(always)]
     pub fn get_hit_ratios(&self) -> Box<[f64; 3]> {
         let hit_counts = self.get_hit_counts().to_vec();
         let hit_len = self.hit_list_for_soc.len();
@@ -423,6 +425,7 @@ impl Simulator {
         hit_ratios
     }
 
+    #[inline(always)]
     pub fn get_accumulate_hit_ratio(&self) -> Box<[f64; 3]> {
         let hit_len = self.hit_list_for_soc.len();
         let hit_count_arr = self.get_hit_counts();
@@ -434,6 +437,7 @@ impl Simulator {
         acc_hit_ratio
     }
 
+    #[inline(always)]
     fn get_wifi_power_constant(&self, video_name: &str, size: CacheLevel) -> f64 {
         let mut wifi_name: String = video_name.to_owned().to_string();
         wifi_name.push_str("_WIFI");
@@ -450,6 +454,7 @@ impl Simulator {
         }
     }
 
+    #[inline(always)]
     fn get_soc_power_constant(&self, video_name: &str, size: CacheLevel) -> f64 {
         let mut soc_name: String = video_name.to_owned().to_string();
         soc_name.push_str("_SOC");
@@ -471,6 +476,27 @@ impl Simulator {
         }
     }
 
+    /// Computation for wifi:
+    /// Since we got hit rate on each level, the hit rate level of each frame means that they
+    /// need to transmit data cumulatively. For instance, frame 1 hit at level 2, therefore, in
+    /// our VR system, we need to transmit both frame of level 1 and level 2 size. You might think
+    /// that why don't we need to consider about the whole segment for computing power consumption.
+    /// That is because we've firstly computing the hit rate in the sense of having segment in
+    /// our VR system.
+    ///
+    /// Computation for optimized wifi:
+    /// In this version, we could prevent the system from fetching level-2 cache by using the
+    /// metadata from client sensor. Since the computation of hit rate considered segment by
+    /// nature, we can simply ignore level two power constant when computing the power of frame
+    /// that missed at level two.
+    /// For example:
+    /// Assume we got the hit ratio [0.5, 0.3, 0.2], which array[0] is for level-1, array[1] is
+    /// for level-2, and so on. Since in this optimization, we know that when missed at level-1,
+    /// we could determine whether level-2 hit or not by using the sensor data (where did user
+    /// look at). The computation of level-1 and level-2 in this optimization is the same in this
+    /// VR system, however, when computing the power consumption that level-2 has missed, we could
+    /// simply add up the power constants of level-1 + level-3.
+    #[inline(always)]
     pub fn power_consumption(&mut self) {
         // extract name from user_file
         // which for example could be: user_viewport_result/Elephant-training-2bpICIClAIg/uid-a413ecca-3822-47b3-92f3-2e2fbe8470c0.txt
@@ -503,28 +529,9 @@ impl Simulator {
 //                 wifi_level_one_power_constant, wifi_level_three_power_constant,
 //                 soc_level_one_power_constant, soc_level_three_power_constant);
 
-        // Computation for wifi:
-        // Since we got hit rate on each level, the hit rate level of each frame means that they
-        // need to transmit data cumulatively. For instance, frame 1 hit at level 2, therefore, in
-        // our VR system, we need to transmit both frame of level 1 and level 2 size. You might think
-        // that why don't we need to consider about the whole segment for computing power consumption.
-        // That is because we've firstly computing the hit rate in the sense of having segment in
-        // our VR system.
-        //
-        // Computation for optimized wifi:
-        // In this version, we could prevent the system from fetching level-2 cache by using the
-        // metadata from client sensor. Since the computation of hit rate considered segment by
-        // nature, we can simply ignore level two power constant when computing the power of frame
-        // that missed at level two.
-        // For example:
-        // Assume we got the hit ratio [0.5, 0.3, 0.2], which array[0] is for level-1, array[1] is
-        // for level-2, and so on. Since in this optimization, we know that when missed at level-1,
-        // we could determine whether level-2 hit or not by using the sensor data (where did user
-        // look at). The computation of level-1 and level-2 in this optimization is the same in this
-        // VR system, however, when computing the power consumption that level-2 has missed, we could
-        // simply add up the power constants of level-1 + level-3.
+//        println!("save_in_O0 {}", self.save_in_O0);
         self.wifi_pc = {
-            let no_resend_segment = self.segment_count - self.segment_resend_counter;
+            let no_resend_segment = self.segment_count - self.segment_resend_counter + self.save_in_O0;
             let no_resend_power = (no_resend_segment as f64 / self.segment_count as f64) * wifi_level_one_power_constant;
             let resend_power = (self.segment_resend_counter as f64 / self.segment_count as f64) * (wifi_level_one_power_constant + wifi_level_three_power_constant);
             assert_eq!(cache_hit_ratios[1], 0.0);
@@ -538,26 +545,30 @@ impl Simulator {
             first_level + third_level
         };
 
-
 //        println!("{:?}", self.get_hit_ratios());
     }
 
+    #[inline(always)]
     pub fn print_power_consumption(&self) {
         println!("{} {}", self.wifi_pc, self.soc_pc);
     }
 
+    #[inline(always)]
     pub fn get_wifi_pc(&self) -> f64 {
         self.wifi_pc
     }
 
+    #[inline(always)]
     pub fn get_soc_pc(&self) -> f64 {
         self.soc_pc
     }
 
+    #[inline(always)]
     pub fn get_segment_resend_cnt(&self) -> usize {
         self.segment_resend_counter
     }
 
+    #[inline(always)]
     pub fn get_segment_count(&self) -> usize {
         self.segment_count
     }
