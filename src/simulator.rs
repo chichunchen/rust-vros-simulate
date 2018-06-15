@@ -369,7 +369,6 @@ impl Simulator {
                                     hit_soc_cache_pair = self.compare_from_level_one(&current_viewport, &user_fov, frame_id, key_frame_ratio_path.unwrap(), width, height);
                                     if hit_soc_cache_pair.0.path != key_frame_ratio_path.unwrap() {
                                         key_frame_ratio_path = Some(hit_soc_cache_pair.0.path);
-                                        // TODO pc-wifi has to count additional segment
                                         self.save_in_O0 += 1;
                                     }
                                 }
