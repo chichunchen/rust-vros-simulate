@@ -54,7 +54,7 @@ pub struct Simulator {
     opt_flag: Optimization,
     wifi_pc: f64,
     soc_pc: f64,
-    save_in_O0: usize,
+    save_in_O1: usize,
 }
 
 #[derive(Deserialize, Debug)]
@@ -105,7 +105,7 @@ impl Simulator {
             opt_flag,
             wifi_pc: 0.0,
             soc_pc: 0.0,
-            save_in_O0: 0,
+            save_in_O1: 0,
         };
         sim.parse_tracing_to_path_list();
         sim.parse_user_data();
@@ -214,7 +214,7 @@ impl Simulator {
                 // TODO check if the cloud server have the other path that has coverage high enough
                 // to be sent back to user.
                 match self.opt_flag {
-                    Optimization::O0 => {
+                    Optimization::O1 => {
                         // find if server has any segment having the coverage greater then threshold
                         for (p, path_viewport) in self.path_list[index].iter().enumerate() {
                             let current_ratio = path_viewport.get_cover_result(user_fov);
@@ -370,7 +370,7 @@ impl Simulator {
                                     if hit_soc_cache_pair.0.path != key_frame_ratio_path.unwrap() {
                                         key_frame_ratio_path = Some(hit_soc_cache_pair.0.path);
                                         // TODO pc-wifi has to count additional segment
-                                        self.save_in_O0 += 1;
+                                        self.save_in_O1 += 1;
                                     }
                                 }
                                 CacheLevel::LevelTwo => {
@@ -529,9 +529,9 @@ impl Simulator {
 //                 wifi_level_one_power_constant, wifi_level_three_power_constant,
 //                 soc_level_one_power_constant, soc_level_three_power_constant);
 
-//        println!("save_in_O0 {}", self.save_in_O0);
+//        println!("save_in_O1 {}", self.save_in_O1);
         self.wifi_pc = {
-            let no_resend_segment = self.segment_count - self.segment_resend_counter + self.save_in_O0;
+            let no_resend_segment = self.segment_count - self.segment_resend_counter + self.save_in_O1;
             let no_resend_power = (no_resend_segment as f64 / self.segment_count as f64) * wifi_level_one_power_constant;
             let resend_power = (self.segment_resend_counter as f64 / self.segment_count as f64) * (wifi_level_one_power_constant + wifi_level_three_power_constant);
             assert_eq!(cache_hit_ratios[1], 0.0);
